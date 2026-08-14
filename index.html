@@ -77,7 +77,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 <div class="app">
 <header>
  <div><h1>OMEGA AI</h1><p>Eurojackpot analizės variklis</p></div>
- <div class="version">v2.0 • Self-Learning Edition</div>
+ <div class="version">v2.2 • Failure Memory & Anomaly Lab</div>
 </header>
 
 <main class="grid">
@@ -116,7 +116,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 </section>
 
 <section class="card c12">
- <h2>TOP 3 portfelis</h2><div class="status">V2.0 kaupia kiekvienos prognozės rezultatą, vertina modelių ir skaičių reputaciją, įsimena nepastebėtus skaičius ir po kiekvieno naujo tiražo automatiškai koreguoja modelių svorius.</div>
+ <h2>TOP 3 portfelis</h2><div class="status">V2.2 prie Aging ir Dynamic Form prideda Failure Penalty, Missed Signal Memory, Probability Anomaly Engine ir kelių backtest horizontų konsensusą. Tikslas – mažiau užstrigti ties pasikartojančiais nesėkmingais favoritais ir atskirai tikrinti neįprastus istorinius nukrypimus.</div>
  <div id="results" class="results"><p style="color:var(--muted)">Paleisk analizę.</p></div>
  <div id="portfolioMetrics" class="report" style="margin-top:12px;color:var(--muted)">Portfelio metrikos atsiras po analizės.</div>
 </section>
@@ -164,6 +164,24 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
  <div class="notice" style="margin-top:12px">Stabilumo rodiklis parodo, kiek iš 7 istorijos horizontų skaičių vertina aukščiau vidurkio. Tai nėra iškritimo tikimybė, o modelių sutarimo matas.</div>
 </section>
 
+<section class="card c6">
+ <h2>Probability Anomaly Engine</h2>
+ <div id="anomalyNumbers" class="scroll"></div>
+ <div class="notice" style="margin-top:12px">Tai nėra didesnės iškritimo tikimybės įrodymas. Rodomas istorinio dažnio nukrypimo, tęstinumo per kelis horizontus ir dabartinio signalo indeksas.</div>
+</section>
+
+<section class="card c6">
+ <h2>Failure & Missed Memory</h2>
+ <div id="failureMemory" class="scroll"></div>
+ <div class="notice" style="margin-top:12px">Failure Penalty slopina skaičius, kuriuos OMEGA kartoja, bet jie nepataiko. Missed Memory tik pažymi pakartotinai nepastebėtus skaičius; ji jų automatiškai nepadaro favoritais.</div>
+</section>
+
+<section class="card c12">
+ <h2>Multi-Horizon Backtest Consensus</h2>
+ <div id="multiHorizonStatus" class="status">Paleisk bent du skirtingus backtest horizontus (pvz. 250 ir 500), kad atsirastų stabilumo konsensusas.</div>
+ <div id="multiHorizonTable" class="scroll"></div>
+</section>
+
 <section class="card c12">
  <h2>Self-Learning Engine</h2>
  <div class="stats">
@@ -173,6 +191,20 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div class="stat"><span>Paskutinis mokymasis</span><b id="lastLearning" style="font-size:16px">—</b></div>
  </div>
  <div id="autoCoach" class="report" style="margin-top:12px;color:var(--muted)">Auto Coach dar neturi mokymosi ciklų.</div>
+ <div class="notice" style="margin-top:12px">
+  <b>Aging:</b> modelių formos pusėjimo laikotarpis – 20 mokymosi ciklų, skaičių reputacijos – 24 ciklai.
+  Naujausi rezultatai svarbesni, tačiau vienas tiražas negali staigiai perversti visų svorių.
+ </div>
+</section>
+
+<section class="card c6">
+ <h2>Dinaminė modelių forma</h2>
+ <div id="dynamicForm" class="scroll"></div>
+</section>
+
+<section class="card c6">
+ <h2>Senstanti skaičių reputacija</h2>
+ <div id="agingNumbers" class="scroll"></div>
 </section>
 <section class="card c6"><h2>Modelių reputacija</h2><div id="modelReputation" class="scroll"></div></section>
 <section class="card c6"><h2>Skaičių reputacija</h2><div id="numberReputation" class="scroll"></div></section>
@@ -224,7 +256,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
  <div id="report" class="report" style="color:var(--muted)">Ataskaita atsiras, kai po išsaugotos prognozės pridėsi naują tiražą.</div>
 </section>
 <section class="card c12" style="margin-top:14px">
- <h2>V1.0 algoritmo principas</h2>
+ <h2>V2.2 algoritmo principas</h2>
  <div class="report">
   1. Sugeneruojami ir genetiškai atrenkami stiprūs pavieniai bilietai.<br>
   2. Kandidatai įvertinami pagal 7 istorijos horizontų Consensus signalą.<br>
@@ -232,11 +264,14 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   4. Kiekvienas rinkinys palyginamas su ankstesnių tiražų scenarijais, nematant ateities.<br>
   5. Core Number Optimizer patikrina kiekvieną pasikartojantį skaičių.<br>
   6. Galutinis rinkinys parenkamas pagal istorinį prizinį signalą, branduolio naudą, balansą ir aprėptį.<br>
-  7. Po naujo tiražo Self-Learning Engine įvertina prognozę, atnaujina reputacijas ir pakoreguoja modelių svorius.
+  7. Po naujo tiražo Self-Learning Engine įvertina prognozę ir atnaujina reputacijas.<br>
+  8. Aging & Dynamic Form modulis sumažina pasenusių favoritų įtaką ir didina šiuo metu geriau veikiančių modelių svorį.<br>
+  9. Failure Penalty baudžia pakartotinai rekomenduojamus, bet nepataikančius skaičius; Missed Signal Memory saugo nepastebėtus signalus, bet jų aklai nepersekioja.<br>
+  10. Probability Anomaly Engine tikrina 20/50/100/250/500/visos istorijos dažnio nukrypimus, o Multi-Horizon Backtest Consensus vertina modelių stabilumą per kelis backtest langus.
  </div>
 </section>
 </main>
-<footer>OMEGA AI v2.0 • Eurojackpot • Self-Learning Edition • LocalStorage</footer>
+<footer>OMEGA AI v2.2 • Eurojackpot • Failure Memory & Anomaly Lab • LocalStorage</footer>
 </div>
 
 <script>
@@ -247,6 +282,9 @@ const PRED_KEY="omega_euro_prediction_v03";
 const LEARN_KEY="omega_self_learning_v20";
 const NUM_REP_KEY="omega_number_reputation_v20";
 const MODEL_REP_KEY="omega_model_reputation_v20";
+const BACKTEST_HORIZON_KEY="omega_backtest_horizons_v22";
+const FORM_HALF_LIFE=20;
+const NUMBER_HALF_LIFE=24;
 const ENGINE_KEY="omega_euro_active_engine_v04";
 let draws=loadDraws(),mode="standard";
 const $=id=>document.getElementById(id);
@@ -551,63 +589,233 @@ function renderConsensus(){
 }
 
 
+
 function defaultModelRep(){return{
- frequency:{cycles:0,score:0,hits:0,opportunities:0},trend:{cycles:0,score:0,hits:0,opportunities:0},
- gap:{cycles:0,score:0,hits:0,opportunities:0},hybrid:{cycles:0,score:0,hits:0,opportunities:0}}}
+ frequency:{cycles:0,score:0,hits:0,opportunities:0,recent:[]},
+ trend:{cycles:0,score:0,hits:0,opportunities:0,recent:[]},
+ gap:{cycles:0,score:0,hits:0,opportunities:0,recent:[]},
+ hybrid:{cycles:0,score:0,hits:0,opportunities:0,recent:[]}
+}}
 function loadJSON(key,fallback){try{const x=JSON.parse(localStorage.getItem(key)||"null");return x??fallback}catch(e){return fallback}}
 function saveJSON(key,value){localStorage.setItem(key,JSON.stringify(value))}
 function getLearning(){return loadJSON(LEARN_KEY,[])}
-function getModelRep(){return loadJSON(MODEL_REP_KEY,defaultModelRep())}
+function getModelRep(){
+ const rep=loadJSON(MODEL_REP_KEY,defaultModelRep());
+ for(const k of ["frequency","trend","gap","hybrid"]){
+  rep[k]=rep[k]||defaultModelRep()[k];
+  rep[k].recent=Array.isArray(rep[k].recent)?rep[k].recent:[];
+ }
+ return rep;
+}
 function getNumberRep(){return loadJSON(NUM_REP_KEY,{})}
+function getBacktestHorizons(){return loadJSON(BACKTEST_HORIZON_KEY,{})}
+function saveBacktestHorizon(key,data){
+ const all=getBacktestHorizons();all[key]=data;saveJSON(BACKTEST_HORIZON_KEY,all);return all;
+}
+function clamp(x,a,b){return Math.max(a,Math.min(b,x))}
+
+function probabilityAnomalyStats(source=draws){
+ const horizons=[20,50,100,250,500,source.length].filter((v,i,a)=>v<=source.length&&a.indexOf(v)===i&&v>=20);
+ const p=.10,rows=[];
+ for(let n=1;n<=50;n++){
+  const parts=horizons.map(h=>{
+   const s=source.slice(-h),obs=s.reduce((a,d)=>a+(d.numbers.includes(n)?1:0),0),exp=h*p;
+   const z=(obs-exp)/Math.sqrt(h*p*(1-p)||1);
+   return{h,obs,rate:obs/h,z};
+  });
+  const pos=parts.filter(x=>x.z>.35).length,strong=parts.filter(x=>x.z>1).length;
+  const persistence=pos/parts.length;
+  const recentZ=parts[0]?.z||0,longZ=parts.at(-1)?.z||0;
+  const avgZ=mean(parts.map(x=>x.z));
+  // Shrunk exploratory score: persistence matters more than one extreme window.
+  const anomaly=clamp(.42*persistence+.16*(strong/parts.length)+.16*clamp(avgZ/2,-1,1)+.14*clamp(recentZ/2,-1,1)+.12*clamp(longZ/2,-1,1),-1,1);
+  rows.push({n,parts,persistence,strong,avgZ,recentZ,longZ,anomaly});
+ }
+ return rows.sort((a,b)=>b.anomaly-a.anomaly);
+}
+
+function numberMemoryStats(){
+ const rep=getNumberRep(),rows=[];
+ for(let n=1;n<=50;n++){
+  const r=rep[n]||{recommended:0,hits:0,core:0,coreHits:0,missedAfterOmission:0,recent:[]};
+  const recent=Array.isArray(r.recent)?r.recent:[];
+  let failWeight=0,missWeight=0,recWeight=0,hitWeight=0;
+  recent.forEach((e,i)=>{
+   const age=recent.length-1-i,w=decayWeight(age,12);
+   if(e.recommended){recWeight+=w;if(e.hit)hitWeight+=w;else failWeight+=w}
+   if(e.missed)missWeight+=w;
+  });
+  const missRate=recWeight?failWeight/recWeight:0;
+  // No penalty before at least ~2 weighted recommendations.
+  const failurePenalty=recWeight<1.7?0:clamp((missRate-.45)*1.1,0,.62)*clamp(recWeight/3,0,1);
+  const missedMemory=clamp(missWeight/2.5,0,.45);
+  rows.push({n,recommended:r.recommended||0,hits:r.hits||0,missed:r.missedAfterOmission||0,recWeight,hitWeight,failWeight,missWeight,failurePenalty,missedMemory});
+ }
+ return rows.sort((a,b)=>(b.failurePenalty-a.failurePenalty)||(b.missedMemory-a.missedMemory));
+}
+
+function multiHorizonWeights(){
+ const saved=getBacktestHorizons(),entries=Object.entries(saved).filter(([,x])=>x&&x.models);
+ if(entries.length<2)return null;
+ const kinds=["frequency","trend","gap","hybrid"],raw={};
+ for(const k of kinds){
+  const vals=[];
+  for(const [,snap] of entries){
+   const m=snap.models[k];if(!m)continue;
+   // Reward beating random, but also use score margin; cap each horizon to prevent domination.
+   vals.push(clamp(.55+(m.delta||0)*.12+(m.scoreDelta||0)*.10,.08,1.25));
+  }
+  const avg=vals.length?mean(vals):.25;
+  const stability=vals.length>1?1/(1+sd(vals)*1.6):1;
+  raw[k]=Math.max(.04,avg*(.72+.28*stability));
+ }
+ const total=Object.values(raw).reduce((a,b)=>a+b,0);
+ return Object.fromEntries(Object.entries(raw).map(([k,v])=>[k,v/total]));
+}
+
+function renderV22Labs(){
+ const anomalies=probabilityAnomalyStats(draws),memory=numberMemoryStats();
+ $("anomalyNumbers").innerHTML=`<table><thead><tr><th>Sk.</th><th>Anomaly</th><th>Horizontai +</th><th>Vid. z</th><th>20 tr. z</th><th>Ilgas z</th></tr></thead><tbody>${anomalies.slice(0,18).map(x=>`<tr><td><b>${x.n}</b></td><td>${x.anomaly.toFixed(3)}</td><td>${Math.round(x.persistence*x.parts.length)}/${x.parts.length}</td><td>${x.avgZ>=0?"+":""}${x.avgZ.toFixed(2)}</td><td>${x.recentZ>=0?"+":""}${x.recentZ.toFixed(2)}</td><td>${x.longZ>=0?"+":""}${x.longZ.toFixed(2)}</td></tr>`).join("")}</tbody></table>`;
+ $("failureMemory").innerHTML=`<table><thead><tr><th>Sk.</th><th>Rekom.</th><th>Pataikė</th><th>Praleistas</th><th>Failure</th><th>Missed mem.</th></tr></thead><tbody>${memory.filter(x=>x.failurePenalty>0||x.missedMemory>0).slice(0,20).map(x=>`<tr><td><b>${x.n}</b></td><td>${x.recommended}</td><td>${x.hits}</td><td>${x.missed}</td><td>${x.failurePenalty.toFixed(3)}</td><td>${x.missedMemory.toFixed(3)}</td></tr>`).join("")||'<tr><td colspan="6">Dar nepakanka mokymosi duomenų.</td></tr>'}</tbody></table>`;
+ renderMultiHorizon();
+}
+function renderMultiHorizon(){
+ const saved=getBacktestHorizons(),entries=Object.entries(saved).sort((a,b)=>(a[1].tests||0)-(b[1].tests||0));
+ const w=multiHorizonWeights();
+ if(!entries.length){$("multiHorizonTable").innerHTML="";return}
+ $("multiHorizonStatus").textContent=w?`Konsensusas iš ${entries.length} backtest horizontų. Galutiniai stabilumo svoriai: Gap ${(w.gap*100).toFixed(0)} %, Trend ${(w.trend*100).toFixed(0)} %, Frequency ${(w.frequency*100).toFixed(0)} %, Hybrid ${(w.hybrid*100).toFixed(0)} %.`:`Išsaugotas ${entries.length} horizontas. Paleisk dar bent vieną kitą.`;
+ const kinds=["gap","trend","frequency","hybrid"];
+ $("multiHorizonTable").innerHTML=`<table><thead><tr><th>Horizontas</th>${kinds.map(k=>`<th>${engineLabel(k)} Δ random</th>`).join("")}</tr></thead><tbody>${entries.map(([key,s])=>`<tr><td><b>${key}</b> (${s.tests})</td>${kinds.map(k=>`<td>${s.models[k]?(s.models[k].delta>=0?"+":"")+s.models[k].delta.toFixed(1)+" p. p.":"—"}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
+
+function decayWeight(age,halfLife){return Math.pow(.5,age/Math.max(halfLife,1))}
+function weightedRate(events,valueKey,totalKey,halfLife){
+ let num=0,den=0;
+ events.forEach((e,i)=>{
+  const age=events.length-1-i,w=decayWeight(age,halfLife);
+  num+=(e[valueKey]||0)*w;den+=(e[totalKey]||0)*w;
+ });
+ return den?num/den:0;
+}
 function modelSnapshot(history){
  const st=computeStats(history),out={};
  for(const k of ["frequency","trend","gap","hybrid"])out[k]=engineScores(st,k).slice(0,15).map(x=>x.n);
  return out;
 }
 function updateNumberReputation(pred,actual){
- const rep=getNumberRep(),flat=pred.results.flatMap(r=>r.numbers),counts={};flat.forEach(n=>counts[n]=(counts[n]||0)+1);
- for(const n of new Set(flat)){const r=rep[n]||{recommended:0,hits:0,core:0,coreHits:0,missedAfterOmission:0};r.recommended++;if(actual.numbers.includes(n))r.hits++;if(counts[n]>=2){r.core++;if(actual.numbers.includes(n))r.coreHits++}rep[n]=r}
- for(const n of actual.numbers)if(!flat.includes(n)){const r=rep[n]||{recommended:0,hits:0,core:0,coreHits:0,missedAfterOmission:0};r.missedAfterOmission++;rep[n]=r}
+ const rep=getNumberRep(),flat=pred.results.flatMap(r=>r.numbers),counts={};
+ flat.forEach(n=>counts[n]=(counts[n]||0)+1);
+ const allNumbers=new Set([...flat,...actual.numbers]);
+ for(const n of allNumbers){
+  const r=rep[n]||{recommended:0,hits:0,core:0,coreHits:0,missedAfterOmission:0,recent:[]};
+  r.recent=Array.isArray(r.recent)?r.recent:[];
+  const recommended=flat.includes(n)?1:0,hit=actual.numbers.includes(n)?1:0,core=(counts[n]||0)>=2?1:0;
+  if(recommended){r.recommended++;if(hit)r.hits++;if(core){r.core++;if(hit)r.coreHits++}}
+  if(hit&&!recommended)r.missedAfterOmission++;
+  r.recent.push({date:actual.date,recommended,hit,core,missed:hit&&!recommended?1:0});
+  r.recent=r.recent.slice(-120);
+  rep[n]=r;
+ }
  saveJSON(NUM_REP_KEY,rep);return rep;
 }
 function updateModelReputation(pred,actual){
  const rep=getModelRep(),snap=pred.modelSnapshot||{};
- for(const k of ["frequency","trend","gap","hybrid"]){const pool=snap[k]||[],hits=pool.filter(n=>actual.numbers.includes(n)).length,r=rep[k]||{cycles:0,score:0,hits:0,opportunities:0};r.cycles++;r.hits+=hits;r.opportunities+=5;r.score+=hits*2-(5-hits)*.18;rep[k]=r}
+ for(const k of ["frequency","trend","gap","hybrid"]){
+  const pool=snap[k]||[],hits=pool.filter(n=>actual.numbers.includes(n)).length;
+  const r=rep[k]||defaultModelRep()[k];
+  r.recent=Array.isArray(r.recent)?r.recent:[];
+  r.cycles++;r.hits+=hits;r.opportunities+=5;r.score+=hits*2-(5-hits)*.18;
+  r.recent.push({date:actual.date,hits,total:5,score:hits*2-(5-hits)*.18});
+  r.recent=r.recent.slice(-120);
+  rep[k]=r;
+ }
  saveJSON(MODEL_REP_KEY,rep);return rep;
 }
+function modelFormStats(){
+ const rep=getModelRep(),rows=[];
+ for(const k of ["frequency","trend","gap","hybrid"]){
+  const r=rep[k],recent=r.recent||[];
+  const form=weightedRate(recent,"hits","total",FORM_HALF_LIFE);
+  const long=r.opportunities?r.hits/r.opportunities:.2;
+  const momentum=recent.length>=4
+   ? weightedRate(recent.slice(-8),"hits","total",4)-weightedRate(recent.slice(0,-4),"hits","total",FORM_HALF_LIFE)
+   : 0;
+  rows.push({k,form,long,momentum,cycles:r.cycles,score:r.score});
+ }
+ return rows.sort((a,b)=>b.form-a.form);
+}
+function agingNumberStats(){
+ const rep=getNumberRep(),rows=[];
+ for(const [n,r] of Object.entries(rep)){
+  const recent=Array.isArray(r.recent)?r.recent:[];
+  const effectiveHit=weightedRate(recent,"hit","recommended",NUMBER_HALF_LIFE);
+  const effectiveCore=weightedRate(recent,"hit","core",NUMBER_HALF_LIFE);
+  let recWeight=0,missedWeight=0;
+  recent.forEach((e,i)=>{
+   const age=recent.length-1-i,w=decayWeight(age,NUMBER_HALF_LIFE);
+   recWeight+=(e.recommended||0)*w;missedWeight+=(e.missed||0)*w;
+  });
+  const learningMem=numberMemoryStats().find(x=>x.n===Number(n));
+  const agingScore=effectiveHit*.58+effectiveCore*.22+Math.min(recWeight/5,1)*.07+Math.min(missedWeight/3,1)*.08-(learningMem?.failurePenalty||0)*.20;
+  rows.push({n:Number(n),effectiveHit,effectiveCore,recWeight,missedWeight,agingScore,events:recent.length});
+ }
+ return rows.sort((a,b)=>b.agingScore-a.agingScore);
+}
 function adaptiveWeightsFromReputation(){
- const back=modelWeightsFromBacktest(),rep=getModelRep(),raw={};
- for(const k of ["frequency","trend","gap","hybrid"]){const r=rep[k]||{cycles:0,hits:0,opportunities:0,score:0},rate=r.opportunities?r.hits/r.opportunities:.2,signal=.45+rate*1.7+Math.max(-.15,Math.min(.25,r.score/Math.max(r.cycles,1)/10));raw[k]=Math.max(.03,(back[k]||.25)*.65+signal*.35)}
- const total=Object.values(raw).reduce((a,b)=>a+b,0);return Object.fromEntries(Object.entries(raw).map(([k,v])=>[k,v/total]));
+ const latest=modelWeightsFromBacktest(),multi=multiHorizonWeights(),back=multi||latest,forms=modelFormStats(),raw={};
+ for(const x of forms){
+  const backSignal=back[x.k]||.25;
+  const longSignal=.35+x.long*1.5;
+  const formSignal=.30+x.form*1.9+Math.max(-.12,Math.min(.12,x.momentum));
+  // Multi-horizon consensus gets slightly more authority once at least two windows exist.
+  raw[x.k]=Math.max(.05,backSignal*(multi?.58:.52)+longSignal*.17+formSignal*(multi?.25:.31));
+ }
+ const total=Object.values(raw).reduce((a,b)=>a+b,0);
+ return Object.fromEntries(Object.entries(raw).map(([k,v])=>[k,v/total]));
 }
 function learnFromDraw(actual){
  const pred=loadJSON(PRED_KEY,null);if(!pred||!pred.results||actual.date<=pred.basedOn)return null;
  const log=getLearning();if(log.some(x=>x.actualDate===actual.date&&x.basedOn===pred.basedOn))return log.at(-1);
  const ticketHits=pred.results.map(r=>({main:r.numbers.filter(n=>actual.numbers.includes(n)),euro:r.euro.filter(n=>actual.euro.includes(n))}));
- const modelRep=updateModelReputation(pred,actual);updateNumberReputation(pred,actual);
+ updateModelReputation(pred,actual);updateNumberReputation(pred,actual);
  const weights=adaptiveWeightsFromReputation();saveJSON("omega_model_weights_v08",weights);
- const bestModel=Object.entries(modelRep).sort((a,b)=>{const ar=a[1].opportunities?a[1].hits/a[1].opportunities:0,br=b[1].opportunities?b[1].hits/b[1].opportunities:0;return br-ar})[0][0];
+ const form=modelFormStats(),bestModel=form[0].k;
  const predicted=[...new Set(pred.results.flatMap(r=>r.numbers))];
- const cycle={actualDate:actual.date,basedOn:pred.basedOn,actual,ticketHits,bestModel,missed:actual.numbers.filter(n=>!predicted.includes(n)),hitMain:actual.numbers.filter(n=>predicted.includes(n)),weights,createdAt:new Date().toISOString()};
+ const cycle={actualDate:actual.date,basedOn:pred.basedOn,actual,ticketHits,bestModel,
+  missed:actual.numbers.filter(n=>!predicted.includes(n)),hitMain:actual.numbers.filter(n=>predicted.includes(n)),
+  weights,form:Object.fromEntries(form.map(x=>[x.k,x.form])),createdAt:new Date().toISOString()};
  log.push(cycle);saveJSON(LEARN_KEY,log.slice(-200));return cycle;
 }
 function autoCoachText(c){
  if(!c)return "Auto Coach dar neturi mokymosi ciklų.";
  const best=c.ticketHits.map((x,i)=>({i,...x})).sort((a,b)=>(b.main.length+b.euro.length)-(a.main.length+a.euro.length))[0],w=c.weights;
+ const forms=modelFormStats(),leader=forms[0],fading=agingNumberStats().filter(x=>x.events>=3&&x.agingScore<.12).slice(0,5).map(x=>x.n);
  return `Naujausias mokymosi ciklas: ${fmtDate(c.actualDate)}.
 Geriausias bilietas: TOP ${best.i+1} — ${best.main.length}/5 pagrindinių ir ${best.euro.length}/2 Euro.
 Pastebėti pagrindiniai: ${c.hitMain.join(", ")||"nė vieno"}. Nepastebėti: ${c.missed.join(", ")||"nė vieno"}.
-Ilgalaikėje reputacijoje pirmauja ${engineLabel(c.bestModel)}.
+Dabartinės formos lyderis: ${engineLabel(leader.k)} (${(leader.form*100).toFixed(1)} %).
+Senstantys favoritai: ${fading.join(", ")||"kol kas nenustatyta"}.
 Atnaujinti svoriai: Gap ${(w.gap*100).toFixed(0)} %, Trend ${(w.trend*100).toFixed(0)} %, Frequency ${(w.frequency*100).toFixed(0)} %, Hybrid ${(w.hybrid*100).toFixed(0)} %.`}
 function renderLearning(){
- const log=getLearning(),model=getModelRep(),num=getNumberRep();$("learningCycles").textContent=log.length;$("lastLearning").textContent=log.length?fmtDate(log.at(-1).actualDate):"—";$("autoCoach").textContent=autoCoachText(log.at(-1));
+ const log=getLearning(),model=getModelRep(),num=getNumberRep(),forms=modelFormStats(),aging=agingNumberStats();
+ $("learningCycles").textContent=log.length;$("lastLearning").textContent=log.length?fmtDate(log.at(-1).actualDate):"—";$("autoCoach").textContent=autoCoachText(log.at(-1));
+
  const mr=Object.entries(model).map(([k,r])=>({k,label:engineLabel(k),rate:r.opportunities?100*r.hits/r.opportunities:0,cycles:r.cycles,score:r.score})).sort((a,b)=>b.rate-a.rate);
  $("bestModelRep").textContent=mr[0]?.cycles?`${mr[0].label} ${mr[0].rate.toFixed(1)} %`:"—";
- $("modelReputation").innerHTML=`<table><thead><tr><th>Modelis</th><th>Ciklai</th><th>Pataikymas</th><th>Balas</th></tr></thead><tbody>${mr.map(x=>`<tr><td>${x.label}</td><td>${x.cycles}</td><td>${x.rate.toFixed(1)}%</td><td>${x.score.toFixed(2)}</td></tr>`).join("")}</tbody></table>`;
+ $("modelReputation").innerHTML=`<table><thead><tr><th>Modelis</th><th>Ciklai</th><th>Ilgalaikis</th><th>Balas</th></tr></thead><tbody>${mr.map(x=>`<tr><td>${x.label}</td><td>${x.cycles}</td><td>${x.rate.toFixed(1)}%</td><td>${x.score.toFixed(2)}</td></tr>`).join("")}</tbody></table>`;
+
+ $("dynamicForm").innerHTML=`<table><thead><tr><th>Modelis</th><th>Dabartinė forma</th><th>Ilgalaikis</th><th>Momentum</th><th>Galutinis svoris</th></tr></thead><tbody>${forms.map(x=>{
+  const w=adaptiveWeightsFromReputation()[x.k];
+  return `<tr><td><b>${engineLabel(x.k)}</b></td><td>${(x.form*100).toFixed(1)}%</td><td>${(x.long*100).toFixed(1)}%</td><td>${x.momentum>=0?"+":""}${(x.momentum*100).toFixed(1)} p. p.</td><td>${(w*100).toFixed(1)}%</td></tr>`
+ }).join("")}</tbody></table>`;
+
  const nr=Object.entries(num).map(([n,r])=>({n:Number(n),recommended:r.recommended||0,hits:r.hits||0,core:r.core||0,coreHits:r.coreHits||0,missed:r.missedAfterOmission||0,rate:r.recommended?100*r.hits/r.recommended:0})).sort((a,b)=>(b.rate-a.rate)||(b.recommended-a.recommended)).slice(0,20);
  const tr=Object.values(num).reduce((s,r)=>s+(r.recommended||0),0),th=Object.values(num).reduce((s,r)=>s+(r.hits||0),0);$("numberHitRate").textContent=tr?`${(100*th/tr).toFixed(1)} %`:"—";
- $("numberReputation").innerHTML=`<table><thead><tr><th>Sk.</th><th>Rekom.</th><th>Pataikė</th><th>Core</th><th>Praleistas</th><th>Rodiklis</th></tr></thead><tbody>${nr.map(x=>`<tr><td><b>${x.n}</b></td><td>${x.recommended}</td><td>${x.hits}</td><td>${x.coreHits}/${x.core}</td><td>${x.missed}</td><td>${x.rate.toFixed(1)}%</td></tr>`).join("")}</tbody></table>`;
- $("learningLog").innerHTML=log.length?`<table><thead><tr><th>Tiražas</th><th>Pataikyti pagr.</th><th>Nepastebėti</th><th>Geriausias modelis</th></tr></thead><tbody>${[...log].reverse().slice(0,30).map(x=>`<tr><td>${fmtDate(x.actualDate)}</td><td>${x.hitMain.join(", ")||"—"}</td><td>${x.missed.join(", ")||"—"}</td><td>${engineLabel(x.bestModel)}</td></tr>`).join("")}</tbody></table>`:'<div class="status">Žurnalas tuščias.</div>';
+ $("numberReputation").innerHTML=`<table><thead><tr><th>Sk.</th><th>Rekom.</th><th>Pataikė</th><th>Core</th><th>Praleistas</th><th>Ilgalaikis</th></tr></thead><tbody>${nr.map(x=>`<tr><td><b>${x.n}</b></td><td>${x.recommended}</td><td>${x.hits}</td><td>${x.coreHits}/${x.core}</td><td>${x.missed}</td><td>${x.rate.toFixed(1)}%</td></tr>`).join("")}</tbody></table>`;
+
+ $("agingNumbers").innerHTML=`<table><thead><tr><th>Sk.</th><th>Senstanti reputacija</th><th>Efektyvus pataikymas</th><th>Core efektyvumas</th><th>Aktyvus svoris</th></tr></thead><tbody>${aging.slice(0,20).map(x=>`<tr><td><b>${x.n}</b></td><td>${x.agingScore.toFixed(3)}</td><td>${(x.effectiveHit*100).toFixed(1)}%</td><td>${(x.effectiveCore*100).toFixed(1)}%</td><td>${x.recWeight.toFixed(2)}</td></tr>`).join("")}</tbody></table>`;
+
+ $("learningLog").innerHTML=log.length?`<table><thead><tr><th>Tiražas</th><th>Pataikyti pagr.</th><th>Nepastebėti</th><th>Formos lyderis</th></tr></thead><tbody>${[...log].reverse().slice(0,30).map(x=>`<tr><td>${fmtDate(x.actualDate)}</td><td>${x.hitMain.join(", ")||"—"}</td><td>${x.missed.join(", ")||"—"}</td><td>${engineLabel(x.bestModel)}</td></tr>`).join("")}</tbody></table>`:'<div class="status">Žurnalas tuščias.</div>';
 }
 
 function modelWeightsFromBacktest(){
@@ -623,7 +831,15 @@ async function analyze(){
  const btn=$("runBtn");btn.disabled=true;$("progressBar").style.width="3%";
  const st=computeStats(),active="ensemble",baseNs=blendedScores(st),consensus=consensusScores(draws);
  const cMap=new Map(consensus.map(x=>[x.n,x.final]));
- const ns=baseNs.map(x=>({...x,score:x.score+(cMap.get(x.n)||0)*.22})).sort((a,b)=>b.score-a.score),es=euroScores(st);
+ const agingMap=new Map(agingNumberStats().map(x=>[x.n,x.agingScore]));
+ const anomalyMap=new Map(probabilityAnomalyStats(draws).map(x=>[x.n,x.anomaly]));
+ const memoryMap=new Map(numberMemoryStats().map(x=>[x.n,x]));
+ const ns=baseNs.map(x=>{
+  const c=cMap.get(x.n)||0,a=agingMap.get(x.n)||0,anom=anomalyMap.get(x.n)||0,mem=memoryMap.get(x.n)||{failurePenalty:0,missedMemory:0};
+  // Missed memory is gated by independent anomaly/consensus evidence so OMEGA does not simply chase the last draw.
+  const gatedMiss=mem.missedMemory*clamp((Math.max(anom,0)+clamp(c/6,0,1))*.55,0,.65);
+  return{...x,score:x.score+c*.20+a*.08+anom*.10+gatedMiss*.07-mem.failurePenalty*.22};
+ }).sort((a,b)=>b.score-a.score),es=euroScores(st);
  $("activeEngine").textContent="AI Ensemble";renderNumberPanels(ns);
  const map=new Map(ns.map(x=>[x.n,x.score])),emap=new Map(es.map(x=>[x.n,x.score]));
  const rng=seeded(Number(st.lastDraw.date.replaceAll("-",""))+st.N*97);
@@ -650,14 +866,14 @@ async function analyze(){
  const scores=ranked.slice(0,200).map(x=>x.score),min=Math.min(...scores),max=Math.max(...scores);
  const res=chosen.map((x,i)=>({numbers:x.c,euro:chosenEuro[i].p,omega:Math.round((55+30*(x.score-min)/(max-min||1))*10)/10,details:details(x.c,st)}));
  res.portfolioMetrics=portfolio.metrics;
- localStorage.setItem(PRED_KEY,JSON.stringify({date:new Date().toISOString(),basedOn:st.lastDraw.date,results:res,modelSnapshot:modelSnapshot(draws),weights:adaptiveWeightsFromReputation(),consensusTop:consensusScores(draws).slice(0,15).map(x=>x.n)}));
+ localStorage.setItem(PRED_KEY,JSON.stringify({date:new Date().toISOString(),basedOn:st.lastDraw.date,results:res,modelSnapshot:modelSnapshot(draws),weights:adaptiveWeightsFromReputation(),form:Object.fromEntries(modelFormStats().map(x=>[x.k,x.form])),consensusTop:consensusScores(draws).slice(0,15).map(x=>x.n),anomalyTop:probabilityAnomalyStats(draws).slice(0,15).map(x=>x.n),memory:numberMemoryStats().filter(x=>x.failurePenalty>0||x.missedMemory>0).slice(0,20)}));
  renderResults(res);renderCoreNumbers(res);renderPortfolioMetrics(res);$("lastRun").textContent=new Date().toLocaleString("lt-LT",{dateStyle:"short",timeStyle:"short"});
- $("progressBar").style.width="100%";$("status").textContent=`Baigta: ${count.toLocaleString("lt-LT")} kandidatų, ${gens} genetinės kartos. Naudotas AI Ensemble, Consensus Engine ir Portfolio Optimizer AI.`;btn.disabled=false;
+ $("progressBar").style.width="100%";$("status").textContent=`Baigta: ${count.toLocaleString("lt-LT")} kandidatų, ${gens} genetinės kartos. Naudotas AI Ensemble, Consensus Engine, Failure Memory, Probability Anomaly Engine ir Portfolio Optimizer AI.`;btn.disabled=false;
 }
 function details(c,st){
- const m=new Map(consensusScores(draws).map(x=>[x.n,x]));
+ const m=new Map(consensusScores(draws).map(x=>[x.n,x])),am=new Map(probabilityAnomalyStats(draws).map(x=>[x.n,x])),mm=new Map(numberMemoryStats().map(x=>[x.n,x]));
  return{sum:c.reduce((a,b)=>a+b,0),odd:c.filter(n=>n%2).length,low:c.filter(n=>n<=25).length,repeats:c.filter(n=>st.lastDraw.numbers.includes(n)).length,
- reasons:c.map(n=>{const x=m.get(n);return `${n}: ${x.support}/7 horizontų, stabilumas ${x.stability.toFixed(0)}${x.trend>2?", kylantis trendas":x.trend<-2?", silpnėjantis trendas":""}`})};
+ reasons:c.map(n=>{const x=m.get(n),a=am.get(n),mem=mm.get(n);return `${n}: ${x.support}/7 horizontų, stabilumas ${x.stability.toFixed(0)}${x.trend>2?", kylantis trendas":x.trend<-2?", silpnėjantis trendas":""}; anomaly ${a.anomaly.toFixed(2)}; failure ${mem.failurePenalty.toFixed(2)}; missed-memory ${mem.missedMemory.toFixed(2)}`})};
 }
 function renderResults(r){$("results").innerHTML=r.map((x,i)=>`<article class="ticket ${i===0?"primary":""}">
  <div class="rank">${i===0?"🥇 TOP 1 — rinkinio lyderis":i===1?"🥈 TOP 2 — rinkinio atrama":"🥉 TOP 3 — rinkinio apsauga"}</div><div class="score" title="Modelio indeksas, ne laimėjimo tikimybė">${x.omega.toFixed(1)} indeksas</div>
@@ -674,7 +890,7 @@ function render(){
  $("activeEngine").textContent="AI Ensemble";
  draws.sort((a,b)=>a.date.localeCompare(b.date));const ec=computeStats(draws).eraCounts;$("era8Count").textContent=ec[8]+" tiraž.";$("era10Count").textContent=ec[10]+" tiraž.";$("era12Count").textContent=ec[12]+" tiraž.";$("drawCount").textContent=draws.length;$("lastDate").textContent=fmtDate(draws.at(-1).date);
  $("drawTable").innerHTML=[...draws].reverse().slice(0,60).map(d=>`<tr><td>${fmtDate(d.date)}</td><td>${d.numbers.join(" · ")}</td><td>${d.euro.join(" · ")}</td></tr>`).join("");
- renderNumberPanels(numberScores(computeStats()));renderConsensus();evaluatePrediction();renderLearning();
+ renderNumberPanels(numberScores(computeStats()));renderConsensus();evaluatePrediction();renderLearning();renderV22Labs();
 }
 function evaluatePrediction(){
  let p;try{p=JSON.parse(localStorage.getItem(PRED_KEY)||"null")}catch(e){}
@@ -787,13 +1003,17 @@ async function runBacktest(){
  const totalW=Object.values(raw).reduce((a,b)=>a+b,0);
  const learned=Object.fromEntries(Object.entries(raw).map(([k,v])=>[k,v/totalW]));
  localStorage.setItem("omega_model_weights_v08",JSON.stringify(learned));
+ const horizonKey=v==="all"?"ALL":String(requested);
+ const modelSnapshotRows=Object.fromEntries(modelRows.map(r=>[r.k,{prizeRate:r.prizeRate,delta:r.delta,score:r.score,scoreDelta:r.score-randomRow.score,coverage:r.coverage}]));
+ saveBacktestHorizon(horizonKey,{tests:total,requested:v,models:modelSnapshotRows,learned,createdAt:new Date().toISOString()});
  localStorage.setItem(ENGINE_KEY,winner.k);
  $("activeEngine").textContent="AI Ensemble";
  $("backtestResults").innerHTML=`<table><thead><tr><th>Modelis</th><th>Bent 1 prizinis iš 3</th><th>Prieš random</th><th>Be prizinio</th><th>Vid. pagr.</th><th>Vid. Euro</th><th>Vid. aprėptis</th><th>OMEGA balas/testui</th></tr></thead>
  <tbody>${rows.map((r,i)=>`<tr><td>${r.k===winner.k?"🏆 ":""}${r.label}</td><td>${r.prizeRate.toFixed(1)}%</td>
  <td>${r.k==="random"?"Kontrolė":`${r.delta>=0?"+":""}${r.delta.toFixed(1)} p. p.`}</td><td>${r.noRate.toFixed(1)}%</td>
  <td>${r.avgMain.toFixed(2)}</td><td>${r.avgEuro.toFixed(2)}</td><td>${r.coverage.toFixed(1)}/15</td><td>${r.score.toFixed(2)}</td></tr>`).join("")}</tbody></table>`;
- $("backtestStatus").textContent=`Baigta: ${total} walk-forward testų. AI Ensemble svoriai: Trend ${(learned.trend*100).toFixed(0)} %, Frequency ${(learned.frequency*100).toFixed(0)} %, Gap ${(learned.gap*100).toFixed(0)} %, Hybrid ${(learned.hybrid*100).toFixed(0)} %.`;
+ const mh=multiHorizonWeights();renderMultiHorizon();
+ $("backtestStatus").textContent=`Baigta: ${total} walk-forward testų. Šio horizonto svoriai: Trend ${(learned.trend*100).toFixed(0)} %, Frequency ${(learned.frequency*100).toFixed(0)} %, Gap ${(learned.gap*100).toFixed(0)} %, Hybrid ${(learned.hybrid*100).toFixed(0)} %.${mh?` Multi-Horizon konsensusas aktyvus (${Object.keys(getBacktestHorizons()).length} horizontai).`:""}`;
  $("backtestProgress").style.width="100%";btn.disabled=false;
 }
 
@@ -807,7 +1027,7 @@ $("addBtn").onclick=()=>{const date=$("dateInput").value,numbers=parseNums($("nu
 $("exportBtn").onclick=()=>{const blob=new Blob([JSON.stringify(draws,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="omega-eurojackpot-duomenys.json";a.click();URL.revokeObjectURL(a.href)};
 $("importBtn").onclick=()=>$("fileInput").click();$("fileInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());
  if(!Array.isArray(x)||!x.every(d=>d.date&&d.numbers?.length===5&&d.euro?.length===2))throw Error();draws=x;saveDraws();render();$("formMsg").textContent="JSON importuotas."}catch(err){$("formMsg").textContent="Netinkamas JSON formatas."}};
-$("resetBtn").onclick=()=>{if(confirm("Atkurti pradinę 977 tiražų bazę?")){draws=structuredClone(BASE_DRAWS);saveDraws();localStorage.removeItem(PRED_KEY);localStorage.removeItem(ENGINE_KEY);localStorage.removeItem(LEARN_KEY);localStorage.removeItem(NUM_REP_KEY);localStorage.removeItem(MODEL_REP_KEY);render();$("formMsg").textContent="Pradinė bazė atkurta."}};
+$("resetBtn").onclick=()=>{if(confirm("Atkurti pradinę 977 tiražų bazę?")){draws=structuredClone(BASE_DRAWS);saveDraws();localStorage.removeItem(PRED_KEY);localStorage.removeItem(ENGINE_KEY);localStorage.removeItem(LEARN_KEY);localStorage.removeItem(NUM_REP_KEY);localStorage.removeItem(MODEL_REP_KEY);localStorage.removeItem(BACKTEST_HORIZON_KEY);render();$("formMsg").textContent="Pradinė bazė atkurta."}};
 $("dateInput").value=new Date().toISOString().slice(0,10);render();
 </script>
 </body>
