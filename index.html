@@ -79,7 +79,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 <div class="app">
 <header>
  <div><h1>OMEGA AI</h1><p>Eurojackpot analizės variklis</p></div>
- <div class="version">v2.4 • Role Portfolio & Consensus Guard</div>
+ <div class="version">v2.5 • Adaptive Coverage Portfolio</div>
 </header>
 
 <main class="grid">
@@ -118,7 +118,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 </section>
 
 <section class="card c12">
- <h2>TOP 3 portfelis</h2><div class="status">V2.4 prie Aging, Dynamic Form, Failure Memory ir Anomaly Engine prideda Consensus Guard bei Role Portfolio Optimizer. TOP 1 saugo stipriausią individualų variantą, TOP 2 veikia kaip atrama, o TOP 3 sąmoningai plečia alternatyvaus scenarijaus aprėptį.</div>
+ <h2>TOP 3 portfelis</h2><div class="status">V2.5 išlaiko Aging, Dynamic Form, Failure Memory, Anomaly Engine ir Consensus Guard, bet portfelio aprėpties nebefiksuoja rankiniu būdu. Adaptive Coverage Portfolio AI kiekvienos analizės metu palygina 11, 12 ir 13 unikalių pagrindinių skaičių strategijas pagal tą pačią istorinę simuliaciją ir pasirenka geriausią kompromisą tarp istorinio rezultato, kokybės ir diversifikacijos.</div>
  <div id="results" class="results"><p style="color:var(--muted)">Paleisk analizę.</p></div>
  <div id="portfolioMetrics" class="report" style="margin-top:12px;color:var(--muted)">Portfelio metrikos atsiras po analizės.</div>
 </section>
@@ -258,7 +258,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
  <div id="report" class="report" style="color:var(--muted)">Ataskaita atsiras, kai po išsaugotos prognozės pridėsi naują tiražą.</div>
 </section>
 <section class="card c12" style="margin-top:14px">
- <h2>V2.4 algoritmo principas</h2>
+ <h2>V2.5 algoritmo principas</h2>
  <div class="report">
   1. Sugeneruojami ir genetiškai atrenkami stiprūs pavieniai bilietai.<br>
   2. Kandidatai įvertinami pagal 7 istorijos horizontų Consensus signalą.<br>
@@ -270,12 +270,13 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   8. Aging & Dynamic Form modulis sumažina pasenusių favoritų įtaką ir didina šiuo metu geriau veikiančių modelių svorį.<br>
   9. Failure Penalty baudžia pakartotinai rekomenduojamus, bet nepataikančius skaičius; Missed Signal Memory saugo nepastebėtus signalus, bet jų aklai nepersekioja.<br>
   10. Probability Anomaly Engine tikrina 20/50/100/250/500/visos istorijos dažnio nukrypimus, o Multi-Horizon Backtest Consensus vertina modelių stabilumą per kelis backtest langus.<br>
-   11. Role Portfolio Optimizer atskiria bilietų roles: TOP 1 – stipriausias, TOP 2 – atrama, TOP 3 – alternatyvus scenarijus su griežtesne aprėptimi.<br>
-   12. Consensus Guard neleidžia vien 7/7 sutarimui pateisinti kartojimo: pasikartojimas reikalauja papildomo anomalijos, istorinio patikimumo arba atminties įrodymo.
+   11. Adaptive Coverage Portfolio AI su tuo pačiu TOP 1 atskirai sukuria 11, 12 ir 13 unikalių pagrindinių skaičių portfelius ir kiekvieną patikrina toje pačioje istorinėje simuliacijoje.<br>
+   12. Coverage Selector pasirenka ne didžiausią aprėptį savaime, o geriausią istorinio signalo, kokybės, balanso ir diversifikacijos kompromisą; 13 skaičių variantas atmetamas, jei dėl jo per daug krenta kokybė.<br>
+   13. Consensus Guard neleidžia vien 7/7 sutarimui pateisinti kartojimo: pasikartojimas reikalauja papildomo anomalijos, istorinio patikimumo arba atminties įrodymo.
  </div>
 </section>
 </main>
-<footer>OMEGA AI v2.4 • Eurojackpot • Role Portfolio & Consensus Guard • LocalStorage</footer>
+<footer>OMEGA AI v2.5 • Eurojackpot • Adaptive Coverage Portfolio • LocalStorage</footer>
 </div>
 
 <script>
@@ -507,32 +508,85 @@ function buildStrengthMap(ranked){
  return m;
 }
 
-function rolePortfolioSet(base,pool,min,max,strength){
- // TOP 1: strongest member of the optimized set. TOP 2 supports it without cloning it.
- // TOP 3 is an explicit alternative scenario and should add new coverage.
- const ordered=[...base].sort((a,b)=>b.score-a.score),top1=ordered[0];
+function adaptiveCoverageScore(metrics,minQuality){
+ // V2.5: coverage is chosen by historical evidence, not by a hard-coded maximum.
+ // A broader set only wins if it preserves enough ticket quality.
+ const histRate=metrics.historicalRate||0;
+ const histAvg=Math.min((metrics.historicalAvg||0)/8,1);
+ const quality=metrics.quality||0;
+ const balance=metrics.balance||0;
+ const coverage=metrics.coverage||0;
+ const qualityGuard=Math.max(0,.58-minQuality)*1.10;
+ return histRate*.50 + histAvg*.22 + quality*.12 + balance*.06 + coverage*.10 - qualityGuard;
+}
+
+function buildCoveragePortfolio(top1,pool,min,max,strength,targetUnique){
  const quality=t=>(t.score-min)/(max-min||1);
  const histQ=t=>t.hist?.length?mean(t.hist)/12:0;
- const supportCandidates=pool.slice(0,140).filter(t=>t!==top1 && overlapCount(t.c,top1.c)<=2);
- let top2=supportCandidates[0]||ordered[1];
- let best2=-Infinity;
- for(const t of supportCandidates){
-  const ov=overlapCount(t.c,top1.c),novel=new Set([...top1.c,...t.c]).size-5;
-  const sc=quality(t)*.58+histQ(t)*.17+novel*.045-(ov===2?.08:0);
-  if(sc>best2){best2=sc;top2=t}
+ const supportPool=pool.slice(0,145).filter(t=>t!==top1);
+ const altPool=pool.slice(0,180).filter(t=>t!==top1);
+ let best=null,bestScore=-Infinity;
+
+ // Search role-aware TOP2/TOP3 pairs. 11 permits more overlap, 13 requires near-maximal coverage.
+ for(const top2 of supportPool){
+  const ov12=overlapCount(top1.c,top2.c);
+  if(targetUnique>=13 && ov12>1)continue;
+  if(targetUnique===12 && ov12>2)continue;
+  if(targetUnique===11 && ov12>2)continue;
+  const uniq12=new Set([...top1.c,...top2.c]).size;
+  if(targetUnique>=13 && uniq12<9)continue;
+  if(targetUnique===12 && uniq12<8)continue;
+
+  for(const top3 of altPool){
+   if(top3===top2)continue;
+   const ov13=overlapCount(top1.c,top3.c),ov23=overlapCount(top2.c,top3.c);
+   if(targetUnique>=13 && (ov13>1||ov23>1))continue;
+   if(targetUnique===12 && (ov13>1||ov23>1))continue;
+   if(targetUnique===11 && (ov13>2||ov23>2))continue;
+
+   const set=[top1,top2,top3];
+   const unique=new Set(set.flatMap(t=>t.c)).size;
+   if(unique<targetUnique)continue;
+   // Prevent a target from silently becoming a very different policy.
+   if(targetUnique===11 && unique>12)continue;
+   if(targetUnique===12 && unique>13)continue;
+
+   const m=portfolioSetMetrics(set,min,max,strength);
+   const minQ=Math.min(...set.map(quality));
+   const roleBonus=quality(top2)*.035+quality(top3)*.025+histQ(top2)*.015+histQ(top3)*.015;
+   const score=adaptiveCoverageScore(m,minQ)+roleBonus;
+   if(score>bestScore){bestScore=score;best={set,metrics:m,target:targetUnique,selectorScore:score,minQuality:minQ}}
+  }
  }
- const altCandidates=pool.slice(0,170).filter(t=>t!==top1&&t!==top2&&overlapCount(t.c,top1.c)<=1&&overlapCount(t.c,top2.c)<=1);
- let top3=altCandidates[0]||ordered[2],best3=-Infinity;
- for(const t of altCandidates){
-  const totalUnique=new Set([...top1.c,...top2.c,...t.c]).size;
-  const novel=t.c.filter(n=>!top1.c.includes(n)&&!top2.c.includes(n)).length;
-  const sc=quality(t)*.45+histQ(t)*.14+novel*.09+Math.max(0,totalUnique-11)*.055;
-  if(sc>best3){best3=sc;top3=t}
- }
- const role=[top1,top2,top3],m=portfolioSetMetrics(role,min,max,strength);
- // Prefer role-separated portfolio unless it sacrifices an excessive amount of total objective.
+ return best;
+}
+
+function rolePortfolioSet(base,pool,min,max,strength){
+ const ordered=[...base].sort((a,b)=>b.score-a.score),top1=ordered[0];
  const baseM=portfolioSetMetrics(base,min,max,strength);
- return (m.unique>=12 && m.objective>=baseM.objective-.16)?{set:role,metrics:m}:{set:base,metrics:baseM};
+ const candidates=[];
+ for(const target of [11,12,13]){
+  const c=buildCoveragePortfolio(top1,pool,min,max,strength,target);
+  if(c)candidates.push(c);
+ }
+ // Always include the unconstrained optimizer result as a safety baseline.
+ const baseQ=Math.min(...base.map(t=>(t.score-min)/(max-min||1)));
+ candidates.push({set:base,metrics:baseM,target:baseM.unique,selectorScore:adaptiveCoverageScore(baseM,baseQ),minQuality:baseQ,baseline:true});
+ candidates.sort((a,b)=>b.selectorScore-a.selectorScore);
+ const winner=candidates[0];
+ // Safety guard: if a wider portfolio gains only a tiny selector edge but sacrifices too much quality,
+ // prefer the next candidate. This avoids diversification for diversification's sake.
+ let chosen=winner;
+ if(winner.target>=13 && winner.minQuality<.48){
+  const alt=candidates.find(x=>x.target<=12 && x.minQuality>=.48);
+  if(alt && alt.selectorScore>=winner.selectorScore-.025)chosen=alt;
+ }
+ chosen.metrics.coverageTarget=chosen.target;
+ chosen.metrics.coverageSelectorScore=chosen.selectorScore;
+ chosen.metrics.coverageCandidates=candidates
+  .filter((x,i,a)=>a.findIndex(y=>y.target===x.target)===i)
+  .map(x=>({target:x.target,unique:x.metrics.unique,score:x.selectorScore,historicalRate:x.metrics.historicalRate,historicalAvg:x.metrics.historicalAvg,quality:x.metrics.quality,minQuality:x.minQuality}));
+ return{set:chosen.set,metrics:chosen.metrics};
 }
 
 function optimizeTicketSet(ranked,rng,iterations,history){
@@ -620,6 +674,8 @@ function renderPortfolioMetrics(results){
  $("portfolioMetrics").innerHTML=`<b>V1.0 portfelio istorinė simuliacija:</b> ${pm.historicalRate!=null?(pm.historicalRate*100).toFixed(1)+" % ankstesnių scenarijų turėjo bent 3 pagrindinių signalą":"—"}.<br>
  <b>Istorinės simuliacijos vidutinė nauda:</b> ${pm.historicalAvg!=null?pm.historicalAvg.toFixed(2):"—"}.<br>
  <b>Rinkinio aprėptis:</b> ${new Set(main).size}/15 pagrindinių ir ${new Set(euro).size}/6 Euro.<br>
+ <b>V2.5 pasirinkta aprėpties politika:</b> ${pm.coverageTarget!=null?pm.coverageTarget+" unikalių pagrindinių":"—"}${pm.coverageSelectorScore!=null?" • selector "+pm.coverageSelectorScore.toFixed(3):""}.<br>
+ <b>11/12/13 palyginimas:</b> ${pm.coverageCandidates?.length?pm.coverageCandidates.map(x=>`${x.target}: ${(x.historicalRate*100).toFixed(1)}% / vid. ${x.historicalAvg.toFixed(2)} / kok. ${(x.quality*100).toFixed(0)}%`).join(" • "):"—"}.<br>
  <b>Kartojami pagrindiniai:</b> ${repeated.length?repeated.map(x=>`${x.n} (${x.count} bil.)`).join(", "):"nėra"}.<br>
  <b>Sutapimai tarp bilietų:</b> ${overlaps.join(", ")}.<br>
  <b>Indeksų skirtumas:</b> ${(Math.max(...idx)-Math.min(...idx)).toFixed(1)}.<br>
@@ -947,7 +1003,7 @@ async function analyze(){
  res.portfolioMetrics=portfolio.metrics;
  localStorage.setItem(PRED_KEY,JSON.stringify({date:new Date().toISOString(),basedOn:st.lastDraw.date,results:res,modelSnapshot:modelSnapshot(draws),weights:adaptiveWeightsFromReputation(),form:Object.fromEntries(modelFormStats().map(x=>[x.k,x.form])),consensusTop:consensusScores(draws).slice(0,15).map(x=>x.n),anomalyTop:probabilityAnomalyStats(draws).slice(0,15).map(x=>x.n),memory:numberMemoryStats().filter(x=>x.failurePenalty>0||x.missedMemory>0).slice(0,20)}));
  renderResults(res);renderCoreNumbers(res);renderPortfolioMetrics(res);$("lastRun").textContent=new Date().toLocaleString("lt-LT",{dateStyle:"short",timeStyle:"short"});
- $("progressBar").style.width="100%";$("status").textContent=`Baigta: ${count.toLocaleString("lt-LT")} kandidatų, ${gens} genetinės kartos. Naudotas AI Ensemble, Consensus Engine, Consensus Guard, Failure Memory, Probability Anomaly Engine ir Role Portfolio Optimizer AI.`;btn.disabled=false;
+ $("progressBar").style.width="100%";$("status").textContent=`Baigta: ${count.toLocaleString("lt-LT")} kandidatų, ${gens} genetinės kartos. Naudotas AI Ensemble, Consensus Engine, Consensus Guard, Failure Memory, Probability Anomaly Engine ir Adaptive Coverage Portfolio AI (11/12/13 aprėpties palyginimas).`;btn.disabled=false;
 }
 function details(c,st){
  const m=new Map(consensusScores(draws).map(x=>[x.n,x])),am=new Map(probabilityAnomalyStats(draws).map(x=>[x.n,x])),mm=new Map(numberMemoryStats().map(x=>[x.n,x]));
