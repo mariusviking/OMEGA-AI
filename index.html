@@ -77,7 +77,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 <div class="app">
 <header>
  <div><h1>OMEGA AI</h1><p>Eurojackpot analizės variklis</p></div>
- <div class="version">v2.2 • Failure Memory & Anomaly Lab</div>
+ <div class="version">v2.3 • False Consensus & Diversification Lab</div>
 </header>
 
 <main class="grid">
@@ -271,7 +271,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
  </div>
 </section>
 </main>
-<footer>OMEGA AI v2.2 • Eurojackpot • Failure Memory & Anomaly Lab • LocalStorage</footer>
+<footer>OMEGA AI v2.3 • Eurojackpot • False Consensus & Diversification Lab • LocalStorage</footer>
 </div>
 
 <script>
@@ -406,6 +406,7 @@ function preparePortfolioPool(ranked,history){
  return pool;
 }
 
+let historyForV23=[];
 function portfolioSetMetrics(set,min,max,strength){
  const q=set.map(t=>(t.score-min)/(max-min||1));
  const flat=set.flatMap(t=>t.c);
@@ -436,17 +437,47 @@ function portfolioSetMetrics(set,min,max,strength){
  const historicalRate=historicalWins/Math.max(sampleCount,1);
  const historicalAvg=historicalUtility/Math.max(sampleCount,1);
 
+ // V2.3: False Consensus Control + Portfolio Diversification.
+ // A number may look strong because the same underlying signal is echoed by several
+ // horizons/models. Reward repetition only when it also survives independent historical evidence.
+ const histReliability=new Map();
+ for(const n of new Set(flat)){
+  let seen=0,hit=0;
+  for(const t of set){
+   if(!t.c.includes(n))continue;
+   seen++;
+   const recent=historyForV23?.slice(-80)||[];
+   if(recent.length){
+    const f=recent.filter(d=>d.numbers.includes(n)).length/recent.length;
+    hit+=clamp(f/(5/50),0,2)/2;
+   }
+  }
+  histReliability.set(n,seen?hit/seen:.5);
+ }
+ let falseConsensusPenalty=0,concentrationPenalty=0;
+ for(const n of new Set(flat)){
+  const count=flat.filter(x=>x===n).length;
+  if(count<2)continue;
+  const s=strength.get(n)||0,rel=histReliability.get(n)??.5;
+  // Strong internal consensus with weak independent history is treated as correlated evidence.
+  if(s>=.72&&rel<.72)falseConsensusPenalty+=(count-1)*(.72-rel)*.34;
+  if(count===3)concentrationPenalty+=.22;
+ }
+ // Explicitly value distinct coverage: 3 tickets can contain 15 unique main numbers.
+ const diversification=Math.max(0,Math.min(1,(unique-9)/6));
  const objective=
-   historicalRate*.46 +
-   Math.min(historicalAvg/8,1)*.17 +
-   Math.min(...q)*.16 +
-   mean(q)*.10 +
+   historicalRate*.44 +
+   Math.min(historicalAvg/8,1)*.16 +
+   Math.min(...q)*.15 +
+   mean(q)*.09 +
    balance*.05 +
-   coverage*.06 +
-   repeatValue -
-   overlapPenalty;
+   diversification*.13 +
+   repeatValue*.62 -
+   overlapPenalty*1.28 -
+   falseConsensusPenalty -
+   concentrationPenalty;
 
- return{objective,historicalRate,historicalAvg,coverage,balance,quality:mean(q)};
+ return{objective,historicalRate,historicalAvg,coverage:diversification,balance,quality:mean(q),falseConsensusPenalty,concentrationPenalty,unique};
 }
 
 function buildStrengthMap(ranked){
@@ -462,6 +493,7 @@ function buildStrengthMap(ranked){
 }
 
 function optimizeTicketSet(ranked,rng,iterations,history){
+ historyForV23=history;
  const pool=preparePortfolioPool(ranked,history);
  const vals=pool.map(x=>x.score),min=Math.min(...vals),max=Math.max(...vals);
  const strength=buildStrengthMap(pool);
@@ -868,7 +900,7 @@ async function analyze(){
  res.portfolioMetrics=portfolio.metrics;
  localStorage.setItem(PRED_KEY,JSON.stringify({date:new Date().toISOString(),basedOn:st.lastDraw.date,results:res,modelSnapshot:modelSnapshot(draws),weights:adaptiveWeightsFromReputation(),form:Object.fromEntries(modelFormStats().map(x=>[x.k,x.form])),consensusTop:consensusScores(draws).slice(0,15).map(x=>x.n),anomalyTop:probabilityAnomalyStats(draws).slice(0,15).map(x=>x.n),memory:numberMemoryStats().filter(x=>x.failurePenalty>0||x.missedMemory>0).slice(0,20)}));
  renderResults(res);renderCoreNumbers(res);renderPortfolioMetrics(res);$("lastRun").textContent=new Date().toLocaleString("lt-LT",{dateStyle:"short",timeStyle:"short"});
- $("progressBar").style.width="100%";$("status").textContent=`Baigta: ${count.toLocaleString("lt-LT")} kandidatų, ${gens} genetinės kartos. Naudotas AI Ensemble, Consensus Engine, Failure Memory, Probability Anomaly Engine ir Portfolio Optimizer AI.`;btn.disabled=false;
+ $("progressBar").style.width="100%";$("status").textContent=`Baigta: ${count.toLocaleString("lt-LT")} kandidatų, ${gens} genetinės kartos. Naudotas AI Ensemble, Consensus Engine, False Consensus Control, Failure Memory, Probability Anomaly Engine ir Diversification Portfolio Optimizer AI.`;btn.disabled=false;
 }
 function details(c,st){
  const m=new Map(consensusScores(draws).map(x=>[x.n,x])),am=new Map(probabilityAnomalyStats(draws).map(x=>[x.n,x])),mm=new Map(numberMemoryStats().map(x=>[x.n,x]));
