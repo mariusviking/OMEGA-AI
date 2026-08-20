@@ -118,7 +118,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 </section>
 
 <section class="card c12">
- <h2>TOP 3 portfelis</h2><div class="status">V2.5 išlaiko Aging, Dynamic Form, Failure Memory, Anomaly Engine ir Consensus Guard, bet portfelio aprėpties nebefiksuoja rankiniu būdu. Adaptive Coverage Portfolio AI kiekvienos analizės metu palygina 11, 12 ir 13 unikalių pagrindinių skaičių strategijas pagal tą pačią istorinę simuliaciją ir pasirenka geriausią kompromisą tarp istorinio rezultato, kokybės ir diversifikacijos.</div>
+ <h2>TOP 3 portfelis</h2><div class="status">V2.6 išlaiko Aging, Dynamic Form, Failure Memory, Anomaly Engine ir Consensus Guard, bet portfelio aprėpties nebefiksuoja rankiniu būdu. Adaptive Coverage Portfolio AI kiekvienos analizės metu palygina 11, 12 ir 13 unikalių pagrindinių skaičių strategijas pagal tą pačią istorinę simuliaciją ir pasirenka geriausią kompromisą tarp istorinio rezultato, kokybės ir diversifikacijos.</div>
  <div id="results" class="results"><p style="color:var(--muted)">Paleisk analizę.</p></div>
  <div id="portfolioMetrics" class="report" style="margin-top:12px;color:var(--muted)">Portfelio metrikos atsiras po analizės.</div>
 </section>
@@ -583,9 +583,17 @@ function rolePortfolioSet(base,pool,min,max,strength){
  }
  chosen.metrics.coverageTarget=chosen.target;
  chosen.metrics.coverageSelectorScore=chosen.selectorScore;
- chosen.metrics.coverageCandidates=candidates
-  .filter((x,i,a)=>a.findIndex(y=>y.target===x.target)===i)
-  .map(x=>({target:x.target,unique:x.metrics.unique,score:x.selectorScore,historicalRate:x.metrics.historicalRate,historicalAvg:x.metrics.historicalAvg,quality:x.metrics.quality,minQuality:x.minQuality}));
+ const bestByTarget=new Map();
+ for(const x of candidates){
+  if(![11,12,13].includes(x.target))continue;
+  const prev=bestByTarget.get(x.target);
+  if(!prev||x.selectorScore>prev.selectorScore)bestByTarget.set(x.target,x);
+ }
+ chosen.metrics.coverageCandidates=[11,12,13].map(target=>{
+  const x=bestByTarget.get(target);
+  return x?{target,available:true,unique:x.metrics.unique,score:x.selectorScore,historicalRate:x.metrics.historicalRate,historicalAvg:x.metrics.historicalAvg,quality:x.metrics.quality,minQuality:x.minQuality}:
+   {target,available:false,unique:target,score:null,historicalRate:null,historicalAvg:null,quality:null,minQuality:null};
+ });
  return{set:chosen.set,metrics:chosen.metrics};
 }
 
@@ -674,8 +682,10 @@ function renderPortfolioMetrics(results){
  $("portfolioMetrics").innerHTML=`<b>V1.0 portfelio istorinė simuliacija:</b> ${pm.historicalRate!=null?(pm.historicalRate*100).toFixed(1)+" % ankstesnių scenarijų turėjo bent 3 pagrindinių signalą":"—"}.<br>
  <b>Istorinės simuliacijos vidutinė nauda:</b> ${pm.historicalAvg!=null?pm.historicalAvg.toFixed(2):"—"}.<br>
  <b>Rinkinio aprėptis:</b> ${new Set(main).size}/15 pagrindinių ir ${new Set(euro).size}/6 Euro.<br>
- <b>V2.5 pasirinkta aprėpties politika:</b> ${pm.coverageTarget!=null?pm.coverageTarget+" unikalių pagrindinių":"—"}${pm.coverageSelectorScore!=null?" • selector "+pm.coverageSelectorScore.toFixed(3):""}.<br>
- <b>11/12/13 palyginimas:</b> ${pm.coverageCandidates?.length?pm.coverageCandidates.map(x=>`${x.target}: ${(x.historicalRate*100).toFixed(1)}% / vid. ${x.historicalAvg.toFixed(2)} / kok. ${(x.quality*100).toFixed(0)}%`).join(" • "):"—"}.<br>
+ <b>V2.6 pasirinkta aprėpties politika:</b> ${pm.coverageTarget!=null?pm.coverageTarget+" unikalių pagrindinių":"—"}${pm.coverageSelectorScore!=null?" • selector "+pm.coverageSelectorScore.toFixed(3):""}.<br>
+ <b>V2.6 11/12/13 palyginimas:</b><br>${pm.coverageCandidates?.length?pm.coverageCandidates.map(x=>x.available!==false
+ ? `${x.target}: ≥3 ${(x.historicalRate*100).toFixed(1)}% • vid. ${x.historicalAvg.toFixed(2)} • kok. ${(x.quality*100).toFixed(0)}% • min. kok. ${(x.minQuality*100).toFixed(0)}% • selector ${x.score.toFixed(3)}${x.target===pm.coverageTarget?" ← PASIRINKTA":""}`
+ : `${x.target}: tinkamo portfelio pagal dabartinius kokybės / persidengimo apribojimus nerasta`).join("<br>"):"—"}<br>
  <b>Kartojami pagrindiniai:</b> ${repeated.length?repeated.map(x=>`${x.n} (${x.count} bil.)`).join(", "):"nėra"}.<br>
  <b>Sutapimai tarp bilietų:</b> ${overlaps.join(", ")}.<br>
  <b>Indeksų skirtumas:</b> ${(Math.max(...idx)-Math.min(...idx)).toFixed(1)}.<br>
