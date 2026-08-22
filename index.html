@@ -212,7 +212,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 <section class="card c6"><h2>Skaičių reputacija</h2><div id="numberReputation" class="scroll"></div></section>
 <section class="card c12"><h2>Mokymosi žurnalas</h2><div id="learningLog" class="scroll"><div class="status">Žurnalas tuščias.</div></div></section>
 <section class="card c12">
- <h2>OMEGA V3.1 — Prize-Aware Adaptive Ensemble</h2>
+ <h2>OMEGA V3.2 — Regime-Gated Ensemble</h2>
  <div class="toolbar">
   <button class="btn green" id="backtestBtn">Paleisti backtest</button>
   <label style="margin:0">Testo apimtis
@@ -226,8 +226,11 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
  </div>
  <div class="progress"><i id="backtestProgress"></i></div>
  <div id="backtestStatus" class="status">Validacija dar nepaleista. Ji parodys, ar OMEGA istorijoje realiai aplenkia atsitiktinę kontrolę. Testuojamas tik praeities duomenimis paremtas walk-forward režimas — be ateities informacijos.</div>
- <div class="status"><b>V3.1 principas:</b> ansamblis optimizuojamas pagal prizui artimesnę naudą: 2 pagrindiniai vertinami stipriau, o 3+ gauna daug didesnį atlygį. Vidinis kalibravimas turi atskirą naujesnį holdout segmentą, todėl vienas trumpas sėkmės periodas negali lengvai užvaldyti svorių. Jei nė vienas režimas nerodo tvaraus pagerėjimo, svoriai traukiami arčiau neutralaus 25/25/25/25 mišinio.</div>
- <div id="backtestResults" class="scroll" style="margin-top:10px"></div>
+ <div class="status"><b>V3.2 principas:</b> OMEGA pirmiausia tikrina, ar kuris nors režimas iš tikrųjų turi pakartojamą signalą ankstesniuose duomenyse. Frequency, Trend, Gap, Hybrid ir adaptyvus ansamblis vertinami atskirai train ir naujesniame holdout lange. Jei lyderis neįveikia neutralaus 25/25/25/25 mišinio pakankama marža, OMEGA persijungia į <b>NEUTRAL</b> režimą ir neapsimeta turinti signalą. Tik stabilų pranašumą parodęs režimas gauna teisę valdyti prognozę.</div>
+ <div id="v32GateDiag" class="report" style="margin-top:12px">
+<b>V3.2 dabartinis Regime Gate:</b> skaičiuojama paleidus analizę / backtestą.
+</div>
+<div id="backtestResults" class="scroll" style="margin-top:10px"></div>
 </section>
 
 <section class="card c12">
@@ -278,7 +281,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
  </div>
 </section>
 </main>
-<footer>OMEGA AI v3.0 • Walk-forward Adaptive Ensemble • LocalStorage</footer>
+<footer>OMEGA AI v3.2 • Regime-Gated Walk-forward Ensemble • LocalStorage</footer>
 </div>
 
 <script>
@@ -990,13 +993,16 @@ function modelWeightsFromBacktest(){
  return{frequency:.25,trend:.25,gap:.25,hybrid:.25};
 }
 function blendedScores(st){
- const w=adaptiveWeightsFromReputation(),ks=["frequency","trend","gap","hybrid"],maps={};
- ks.forEach(k=>maps[k]=new Map(engineScores(st,k).map(x=>[x.n,x.score])));
- return st.nums.map(n=>({n,score:ks.reduce((s,k)=>s+w[k]*(maps[k].get(n)||0),0),gap:st.gaps[n]})).sort((a,b)=>b.score-a.score);
+ // V3.2 live prediction uses the same historical regime gate as validation.
+ const gate=v32RegimeDecision(draws),ks=["frequency","trend","gap","hybrid"],maps={};
+ ks.forEach(k=>maps[k]=new Map(engineScores(st,k).map((x,i)=>[x.n,1-i/49])));
+ const out=st.nums.map(n=>({n,score:ks.reduce((s,k,i)=>s+gate.w[i]*(maps[k].get(n)||0),0),gap:st.gaps[n]})).sort((a,b)=>b.score-a.score);
+ out.gate=gate;
+ return out;
 }
 async function analyze(){
  const btn=$("runBtn");btn.disabled=true;$("progressBar").style.width="3%";
- const st=computeStats(),active="ensemble",baseNs=blendedScores(st),consensus=consensusScores(draws);
+ const st=computeStats(),active="ensemble",baseNs=blendedScores(st),liveGate=baseNs.gate||v32RegimeDecision(draws),consensus=consensusScores(draws);
  const cMap=new Map(consensus.map(x=>[x.n,x.final]));
  const agingMap=new Map(agingNumberStats().map(x=>[x.n,x.agingScore]));
  const anomalyMap=new Map(probabilityAnomalyStats(draws).map(x=>[x.n,x.anomaly]));
@@ -1007,7 +1013,8 @@ async function analyze(){
   const gatedMiss=mem.missedMemory*clamp((Math.max(anom,0)+clamp(c/6,0,1))*.55,0,.65);
   return{...x,score:x.score+c*.20+a*.08+anom*.10+gatedMiss*.07-mem.failurePenalty*.22};
  }).sort((a,b)=>b.score-a.score),es=euroScores(st);
- $("activeEngine").textContent="AI Ensemble";renderNumberPanels(ns);
+ $("activeEngine").textContent=`V3.2 ${liveGate.label}${liveGate.mode==="neutral"?" • signalas nepatvirtintas":` • confidence ${(liveGate.confidence*100).toFixed(0)}%`}`;renderNumberPanels(ns);
+ if($("v32GateDiag")) $("v32GateDiag").innerHTML=`<b>V3.2 dabartinis Regime Gate:</b> ${liveGate.label} • ${liveGate.reason}<br><small>Naudojami svoriai: Frequency ${(liveGate.w[0]*100).toFixed(0)} %, Trend ${(liveGate.w[1]*100).toFixed(0)} %, Gap ${(liveGate.w[2]*100).toFixed(0)} %, Hybrid ${(liveGate.w[3]*100).toFixed(0)} %.</small>`;
  const map=new Map(ns.map(x=>[x.n,x.score])),emap=new Map(es.map(x=>[x.n,x.score]));
  const rng=seeded(Number(st.lastDraw.date.replaceAll("-",""))+st.N*97);
  const count=mode==="deep"?240000:60000,gens=mode==="deep"?65:25,popSize=mode==="deep"?850:400;
@@ -1140,7 +1147,7 @@ function v3WeightCandidates(){
  return out;
 }
 const V3_WEIGHT_GRID=v3WeightCandidates();
-// V3.1: prize-aware inner objective + holdout protection.
+// V3.2: regime-gated objective. A model may be used only if it earns the right on unseen recent history.
 function v31SampleUtility(ranked,actual){
  const pos=new Map(ranked.map((x,i)=>[x[0],i]));
  let h5=0,h10=0,h15=0,rr=0;
@@ -1149,7 +1156,6 @@ function v31SampleUtility(ranked,actual){
   if(r<5)h5++; if(r<10)h10++; if(r<15)h15++;
   rr+=1/(r+3);
  }
- // Prize-aware convex reward: 2 hits matter materially, 3+ matter much more.
  const mainReward=[0,0.7,2.6,7.5,17,36][h5];
  return mainReward + 0.25*h10 + 0.10*h15 + 0.35*rr;
 }
@@ -1162,36 +1168,81 @@ function v31EvaluateWeights(samples,w){
  }
  return samples.length?score/samples.length:0;
 }
-function adaptiveEnsembleWeights(history){
- // Up to ~72 targets, sampled every 3 draws; all are strictly before the target draw.
- const start=Math.max(120,history.length-216), samples=[];
+function v32EvaluateSingle(samples,j){
+ let score=0;
+ for(const s of samples){
+  const ranked=[...s.maps[j].entries()].sort((a,b)=>b[1]-a[1]);
+  score+=v31SampleUtility(ranked,s.actual);
+ }
+ return samples.length?score/samples.length:0;
+}
+function v32BuildSamples(history){
+ const start=Math.max(120,history.length-240), samples=[];
  for(let i=start;i<history.length;i+=3){
   const h=history.slice(0,i),actual=history[i];
   const maps=V3_COMPONENTS.map(k=>rankMapFor(h,k));
   samples.push({maps,actual:new Set(actual.numbers)});
  }
- if(samples.length<8)return {w:[.25,.25,.25,.25],score:0,train:0,holdout:0};
- const cut=Math.max(5,Math.floor(samples.length*.70)),train=samples.slice(0,cut),holdout=samples.slice(cut);
+ return samples;
+}
+function adaptiveEnsembleWeights(history){
+ const samples=v32BuildSamples(history);
+ if(samples.length<10)return {w:[.25,.25,.25,.25],score:0,train:0,holdout:0};
+ const cut=Math.max(6,Math.floor(samples.length*.68)),train=samples.slice(0,cut),holdout=samples.slice(cut);
  let best={w:[.25,.25,.25,.25],score:-1e9,train:0,holdout:0};
- const neutral=[.25,.25,.25,.25],neutralHold=v31EvaluateWeights(holdout,neutral);
  for(const w of V3_WEIGHT_GRID){
   const tr=v31EvaluateWeights(train,w),ho=v31EvaluateWeights(holdout,w);
-  // Holdout counts almost as much as training; extreme weights are penalized.
-  const reg=0.16*w.reduce((a,x)=>a+Math.pow(x-.25,2),0);
-  const instability=Math.max(0,tr-ho)*0.22;
-  const score=.54*tr+.46*ho-reg-instability;
+  const reg=0.18*w.reduce((a,x)=>a+Math.pow(x-.25,2),0);
+  const instability=Math.max(0,tr-ho)*0.25;
+  const score=.42*tr+.58*ho-reg-instability;
   if(score>best.score)best={w:[...w],score,train:tr,holdout:ho};
  }
- // If the newer holdout does not beat neutral, shrink by half toward neutral.
- if(best.holdout<=neutralHold){best.w=best.w.map(x=>(x+.25)/2);best.score=.5*best.score+.5*(.54*v31EvaluateWeights(train,neutral)+.46*neutralHold);}
  return best;
+}
+function v32RegimeDecision(history){
+ const samples=v32BuildSamples(history);
+ const neutral=[.25,.25,.25,.25];
+ if(samples.length<10)return {mode:"neutral",label:"NEUTRAL",w:neutral,confidence:0,reason:"Per mažai vidinio mokymosi pavyzdžių"};
+ const cut=Math.max(6,Math.floor(samples.length*.68)),train=samples.slice(0,cut),holdout=samples.slice(cut);
+ const neutralTrain=v31EvaluateWeights(train,neutral), neutralHold=v31EvaluateWeights(holdout,neutral);
+ const fit=adaptiveEnsembleWeights(history);
+ const candidates=[
+  {mode:"adaptive",label:"Adaptive",w:fit.w,train:fit.train,hold:fit.holdout}
+ ];
+ for(let j=0;j<V3_COMPONENTS.length;j++){
+  const w=[0,0,0,0];w[j]=1;
+  candidates.push({mode:V3_COMPONENTS[j],label:engineLabel(V3_COMPONENTS[j]),w,
+   train:v32EvaluateSingle(train,j),hold:v32EvaluateSingle(holdout,j)});
+ }
+ candidates.forEach(c=>{
+  c.trainDelta=c.train-neutralTrain;
+  c.holdDelta=c.hold-neutralHold;
+  c.robust=.35*c.trainDelta+.65*c.holdDelta-Math.max(0,-c.trainDelta)*.30;
+ });
+ candidates.sort((a,b)=>b.robust-a.robust);
+ const best=candidates[0];
+ // Signal gate: recent unseen window must beat neutral and training may not collapse.
+ const minHoldMargin=0.075, minTrainMargin=-0.015, minRobust=0.045;
+ const passed=best.holdDelta>=minHoldMargin && best.trainDelta>=minTrainMargin && best.robust>=minRobust;
+ if(!passed){
+  return {mode:"neutral",label:"NEUTRAL",w:neutral,confidence:0,
+   reason:`Nė vienas režimas neperėjo vartų (geriausias ${best.label}: holdout Δ ${best.holdDelta.toFixed(3)}, train Δ ${best.trainDelta.toFixed(3)})`,
+   candidates,neutralTrain,neutralHold};
+ }
+ const conf=clamp((best.robust-minRobust)/0.35,0,1);
+ // Even when passed, shrink a little toward neutral unless confidence is high.
+ const alpha=.55+.40*conf;
+ const w=best.w.map((x,i)=>alpha*x+(1-alpha)*neutral[i]);
+ return {mode:best.mode,label:best.label,w,confidence:conf,reason:`Praėjo vartus: holdout Δ ${best.holdDelta.toFixed(3)}, train Δ ${best.trainDelta.toFixed(3)}`,
+  candidates,neutralTrain,neutralHold};
 }
 function validationRanked(history,kind){
  const st=computeStats(history);
  if(kind!=="omega") return {st,ns:engineScores(st,kind)};
- const fit=adaptiveEnsembleWeights(history),maps=V3_COMPONENTS.map(k=>new Map(engineScores(st,k).map((x,i)=>[x.n,1-i/49]))),ns=[];
- for(let n=1;n<=50;n++){let score=0;for(let j=0;j<4;j++)score+=fit.w[j]*(maps[j].get(n)||0);ns.push({n,score,gap:st.gaps[n]});}
- ns.sort((a,b)=>b.score-a.score); return {st,ns,v3weights:fit.w};
+ const gate=v32RegimeDecision(history);
+ const maps=V3_COMPONENTS.map(k=>new Map(engineScores(st,k).map((x,i)=>[x.n,1-i/49]))),ns=[];
+ for(let n=1;n<=50;n++){let score=0;for(let j=0;j<4;j++)score+=gate.w[j]*(maps[j].get(n)||0);ns.push({n,score,gap:st.gaps[n]});}
+ ns.sort((a,b)=>b.score-a.score); return {st,ns,v3weights:gate.w,gate};
 }
 function validationTickets(history,kind,seed){
  const {st,ns}=validationRanked(history,kind), map=new Map(ns.map(x=>[x.n,x.score])),rng=seeded(seed);
@@ -1224,23 +1275,25 @@ async function runBacktest(){
  const btn=$("backtestBtn");btn.disabled=true;
  const v=$("backtestSize").value,requested=v==="all"?draws.length:Number(v),start=Math.max(120,draws.length-requested),total=draws.length-start;
  const kinds=["omega","frequency","trend","gap","hybrid"],stats=Object.fromEntries([...kinds,"random"].map(k=>[k,blankValidation()]));
- $("backtestStatus").textContent="Vyksta V3.1 Prize-Aware walk-forward egzaminas. Kiekviena prognozė kuriama tik iš tuo momentu buvusių tiražų; random kontrolė vidurkinama per 20 portfelių.";$("backtestProgress").style.width="1%";
+ $("backtestStatus").textContent="Vyksta V3.2 Regime-Gated walk-forward egzaminas. Kiekviena prognozė kuriama tik iš tuo momentu buvusių tiražų; random kontrolė vidurkinama per 20 portfelių.";$("backtestProgress").style.width="1%";
  for(let i=start;i<draws.length;i++){
   const history=draws.slice(0,i),actual=draws[i];
   for(const kind of kinds)addValidation(stats[kind],validationTickets(history,kind,i*1009+kind.length*7919),actual);
   for(let r=0;r<20;r++)addValidation(stats.random,randomTickets(i*7919+r*104729),actual,1/20);
   if((i-start)%3===0){$("backtestProgress").style.width=(100*(i-start+1)/total)+"%";await new Promise(r=>setTimeout(r,0));}
  }
- const labels={omega:"OMEGA V3.1 Prize-Aware",frequency:"Frequency",trend:"Trend",gap:"Gap",hybrid:"Hybrid",random:"Random kontrolė"};
+ const labels={omega:"OMEGA V3.2 Regime-Gated",frequency:"Frequency",trend:"Trend",gap:"Gap",hybrid:"Hybrid",random:"Random kontrolė"};
  const rows=Object.entries(stats).map(([k,s])=>({k,label:labels[k],prize:100*s.setsPrize/s.tests,avgMain:s.totalMain/(s.tests*3),avgEuro:s.totalEuro/(s.tests*3),coverage:s.coverage/s.tests,d0:100*s.bestDist[0]/s.tests,d1:100*s.bestDist[1]/s.tests,d2:100*s.bestDist[2]/s.tests,d3:100*s.bestDist[3]/s.tests,e0:100*s.euroDist[0]/s.tests,e1:100*s.euroDist[1]/s.tests,e2:100*s.euroDist[2]/s.tests}));
  const rr=rows.find(x=>x.k==="random"),om=rows.find(x=>x.k==="omega"),simple=rows.filter(x=>!["omega","random"].includes(x.k));
  rows.forEach(x=>{x.mainDelta=x.avgMain-rr.avgMain;x.threeDelta=x.d3-rr.d3;x.prizeDelta=x.prize-rr.prize});
  const bestSimple={main:Math.max(...simple.map(x=>x.avgMain)),three:Math.max(...simple.map(x=>x.d3)),prize:Math.max(...simple.map(x=>x.prize))};
  const vsRandom=(om.avgMain>rr.avgMain?1:0)+(om.d3>rr.d3?1:0)+(om.prize>rr.prize?1:0);
  const vsSimple=(om.avgMain>bestSimple.main?1:0)+(om.d3>bestSimple.three?1:0)+(om.prize>bestSimple.prize?1:0);
- const verdict=vsRandom===3&&vsSimple>=2?"🟢 V3.1 parodė stiprų signalą: aplenkė Random pagal visus 3 kriterijus ir bent 2/3 geriausių paprastų kontrolinių rezultatų.":vsRandom>=2&&vsSimple>=1?"🟡 V3.1 turi dalinį signalą, bet dar nepakanka teigti stabilų pranašumą prieš paprastus modelius.":"🔴 V3.1 neįrodė pranašumo. Sudėtingesnis ansamblis šiuo horizontu nėra geresnis už kontrolinius modelius.";
- $("backtestResults").innerHTML=`<div class="report" style="margin-bottom:12px"><b>V3.1 VERDIKTAS:</b> ${verdict}<br><small>Vertinama: vid. pagrindinių pataikymų, ≥3 pagrindinių dažnis ir bent vieno prizinio bilieto dažnis. Loterijos traukimai išlieka atsitiktiniai; teigiamas istorinis rezultatas negarantuoja būsimo pranašumo.</small></div><table><thead><tr><th>Modelis</th><th>0 pagr.</th><th>1 pagr.</th><th>2 pagr.</th><th>≥3 pagr.</th><th>Vid. pagr./bil.</th><th>Vid. Euro/bil.</th><th>Prizinis setas</th><th>Aprėptis</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${x.label}</b>${x.k==="omega"?`<br><small>Δ main ${x.mainDelta>=0?"+":""}${x.mainDelta.toFixed(3)} • Δ≥3 ${x.threeDelta>=0?"+":""}${x.threeDelta.toFixed(1)} p.p.</small>`:""}</td><td>${x.d0.toFixed(1)}%</td><td>${x.d1.toFixed(1)}%</td><td>${x.d2.toFixed(1)}%</td><td>${x.d3.toFixed(1)}%</td><td>${x.avgMain.toFixed(3)}</td><td>${x.avgEuro.toFixed(3)}</td><td>${x.prize.toFixed(1)}%</td><td>${x.coverage.toFixed(1)}/15</td></tr>`).join("")}</tbody></table>`;
- $("backtestStatus").textContent=`Baigta: ${total} visiškai atskirtų walk-forward testų. OMEGA V3.1 prieš random: vid. pagr. ${om.mainDelta>=0?"+":""}${om.mainDelta.toFixed(3)}, ≥3 ${om.threeDelta>=0?"+":""}${om.threeDelta.toFixed(1)} p.p., prizinis setas ${om.prizeDelta>=0?"+":""}${om.prizeDelta.toFixed(1)} p.p.`;
+ const verdict=vsRandom===3&&vsSimple>=2?"🟢 V3.2 parodė stiprų signalą: režimų vartai ir ansamblis aplenkė Random pagal visus 3 kriterijus bei bent 2/3 geriausių paprastų kontrolinių rezultatų.":vsRandom>=2&&vsSimple>=1?"🟡 V3.2 turi dalinį signalą, bet dar nepakanka teigti stabilų pranašumą. Režimų vartai sumažina aklą pasitikėjimą, tačiau pats signalas dar silpnas.":"🔴 V3.2 neįrodė prognozavimo pranašumo. Regime Gate tokiu atveju skirtas ne „išspausti“ rezultatą, o sąžiningai pripažinti, kad istorinis signalas nepakankamas.";
+ $("backtestResults").innerHTML=`<div class="report" style="margin-bottom:12px"><b>V3.2 VERDIKTAS:</b> ${verdict}<br><small>Vertinama: vid. pagrindinių pataikymų, ≥3 pagrindinių dažnis ir bent vieno prizinio bilieto dažnis. Loterijos traukimai išlieka atsitiktiniai; teigiamas istorinis rezultatas negarantuoja būsimo pranašumo.</small></div><table><thead><tr><th>Modelis</th><th>0 pagr.</th><th>1 pagr.</th><th>2 pagr.</th><th>≥3 pagr.</th><th>Vid. pagr./bil.</th><th>Vid. Euro/bil.</th><th>Prizinis setas</th><th>Aprėptis</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${x.label}</b>${x.k==="omega"?`<br><small>Δ main ${x.mainDelta>=0?"+":""}${x.mainDelta.toFixed(3)} • Δ≥3 ${x.threeDelta>=0?"+":""}${x.threeDelta.toFixed(1)} p.p.</small>`:""}</td><td>${x.d0.toFixed(1)}%</td><td>${x.d1.toFixed(1)}%</td><td>${x.d2.toFixed(1)}%</td><td>${x.d3.toFixed(1)}%</td><td>${x.avgMain.toFixed(3)}</td><td>${x.avgEuro.toFixed(3)}</td><td>${x.prize.toFixed(1)}%</td><td>${x.coverage.toFixed(1)}/15</td></tr>`).join("")}</tbody></table>`;
+ $("backtestStatus").textContent=`Baigta: ${total} visiškai atskirtų walk-forward testų. OMEGA V3.2 prieš random: vid. pagr. ${om.mainDelta>=0?"+":""}${om.mainDelta.toFixed(3)}, ≥3 ${om.threeDelta>=0?"+":""}${om.threeDelta.toFixed(1)} p.p., prizinis setas ${om.prizeDelta>=0?"+":""}${om.prizeDelta.toFixed(1)} p.p.`;
+ const gateNow=v32RegimeDecision(draws);
+ if($("v32GateDiag")) $("v32GateDiag").innerHTML=`<b>V3.2 dabartinis Regime Gate:</b> ${gateNow.label} • ${gateNow.reason}<br><small>Svoriai: Frequency ${(gateNow.w[0]*100).toFixed(0)} %, Trend ${(gateNow.w[1]*100).toFixed(0)} %, Gap ${(gateNow.w[2]*100).toFixed(0)} %, Hybrid ${(gateNow.w[3]*100).toFixed(0)} %.</small>`;
  $("backtestProgress").style.width="100%";btn.disabled=false;
 }
 $("backtestBtn").onclick=runBacktest;
