@@ -280,8 +280,16 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
    14. Consensus Guard neleidžia vien 7/7 sutarimui pateisinti kartojimo: pasikartojimas reikalauja papildomo anomalijos, istorinio patikimumo arba atminties įrodymo.
  </div>
 </section>
+
+<section class="card c12" id="omegaAuditCard">
+ <h2>OMEGA AUDIT — 5 × 50 nepriklausomų testų</h2>
+ <div class="toolbar"><button class="btn green" id="runAuditBtn" onclick="runOmegaAudit()">Paleisti 5×50 auditą</button></div>
+ <div id="auditStatus" class="status">250 naujausių walk-forward testų bus suskaidyti į 5 chronologinius blokus po 50.</div>
+ <div id="auditResults" class="scroll" style="margin-top:12px"></div>
+</section>
+
 </main>
-<footer>OMEGA AI v3.2 • Regime-Gated Walk-forward Ensemble • LocalStorage</footer>
+<footer>OMEGA AI v3.2 AUDIT • Regime-Gated • 5×50 Walk-forward • LocalStorage</footer>
 </div>
 
 <script>
@@ -1308,6 +1316,58 @@ $("importBtn").onclick=()=>$("fileInput").click();$("fileInput").onchange=async 
  if(!Array.isArray(x)||!x.every(d=>d.date&&d.numbers?.length===5&&d.euro?.length===2))throw Error();draws=x;saveDraws();render();$("formMsg").textContent="JSON importuotas."}catch(err){$("formMsg").textContent="Netinkamas JSON formatas."}};
 $("resetBtn").onclick=()=>{if(confirm("Atkurti pradinę 977 tiražų bazę?")){draws=structuredClone(BASE_DRAWS);saveDraws();localStorage.removeItem(PRED_KEY);localStorage.removeItem(ENGINE_KEY);localStorage.removeItem(LEARN_KEY);localStorage.removeItem(NUM_REP_KEY);localStorage.removeItem(MODEL_REP_KEY);localStorage.removeItem(BACKTEST_HORIZON_KEY);render();$("formMsg").textContent="Pradinė bazė atkurta."}};
 $("dateInput").value=new Date().toISOString().slice(0,10);render();
+
+
+async function runOmegaAudit(){
+ const btn=$("runAuditBtn"), status=$("auditStatus"), out=$("auditResults");
+ btn.disabled=true; out.innerHTML=""; status.textContent="Vyksta 5×50 auditas…";
+ const kinds=["omega","frequency","trend","gap","hybrid","random"];
+ const labels={omega:"OMEGA V3.2",frequency:"Frequency",trend:"Trend",gap:"Gap",hybrid:"Hybrid",random:"Random"};
+ if(draws.length<370){status.textContent="Auditui reikia bent 370 tiražų, kad prieš 250 testų liktų mokymosi istorija.";btn.disabled=false;return;}
+ const start=draws.length-250, rows=[];
+ for(let i=start;i<draws.length;i++){
+  const history=draws.slice(0,i), actual=draws[i], one={date:actual.date,s:{}};
+  for(const kind of kinds){
+   const s={tests:0,totalMain:0,totalEuro:0,setsPrize:0,coverage:0,bestDist:[0,0,0,0],euroDist:[0,0,0]};
+   if(kind==="random"){
+    for(let r=0;r<20;r++)addValidation(s,randomTickets(i*7919+r*104729),actual,1/20);
+   } else addValidation(s,validationTickets(history,kind,i*1009+kind.length*7919),actual);
+   one.s[kind]=s;
+  }
+  rows.push(one);
+  if((i-start)%5===0){status.textContent=`Auditas ${i-start+1}/250…`;await new Promise(r=>setTimeout(r,0));}
+ }
+ function merge(rs,k){
+  const z={tests:0,totalMain:0,totalEuro:0,setsPrize:0,coverage:0,bestDist:[0,0,0,0],euroDist:[0,0,0]};
+  for(const row of rs){const s=row.s[k];z.tests+=s.tests;z.totalMain+=s.totalMain;z.totalEuro+=s.totalEuro;z.setsPrize+=s.setsPrize;z.coverage+=s.coverage;
+   for(let j=0;j<4;j++)z.bestDist[j]+=s.bestDist[j];for(let j=0;j<3;j++)z.euroDist[j]+=s.euroDist[j];}
+  return z;
+ }
+ function M(s){return {avg:s.totalMain/(s.tests*3),three:100*s.bestDist[3]/s.tests,prize:100*s.setsPrize/s.tests};}
+ const blocks=[], wins={avg:0,three:0,prize:0,all:0};
+ for(let b=0;b<5;b++){
+  const rs=rows.slice(b*50,(b+1)*50),m={};for(const k of kinds)m[k]=M(merge(rs,k));
+  const o=m.omega,r=m.random,da=o.avg-r.avg,dt=o.three-r.three,dp=o.prize-r.prize;
+  if(da>0)wins.avg++;if(dt>0)wins.three++;if(dp>0)wins.prize++;if(da>0&&dt>0&&dp>0)wins.all++;
+  const best=["frequency","trend","gap","hybrid"].map(k=>({k,...m[k]})).sort((a,b)=>b.avg-a.avg)[0];
+  blocks.push({b:b+1,from:rs[0].date,to:rs[49].date,o,da,dt,dp,best});
+ }
+ const all={};for(const k of kinds)all[k]=M(merge(rows,k));
+ const O=all.omega,R=all.random,DA=O.avg-R.avg,DT=O.three-R.three,DP=O.prize-R.prize;
+ let verdict;
+ if(wins.avg>=4&&wins.three>=3&&wins.prize>=3&&DA>0&&DT>0&&DP>0) verdict="🟢 GO — pranašumas kartojasi daugumoje nepriklausomų blokų.";
+ else if(wins.avg>=3&&(wins.three>=3||wins.prize>=3)&&DA>0) verdict="🟡 NEAIŠKU — dalinis signalas kartojasi, bet dar nėra stabilus.";
+ else verdict="🔴 NO-GO — pranašumas nepasikartoja pakankamai stabiliai. Toliau optimizuoti prognozavimo formulę be naujo įrodymo nerekomenduojama.";
+ const trs=blocks.map(x=>`<tr><td><b>${x.b}</b><br><small>${x.from} → ${x.to}</small></td><td>${x.o.avg.toFixed(3)}<br><small>Δ ${x.da>=0?"+":""}${x.da.toFixed(3)}</small></td><td>${x.o.three.toFixed(1)}%<br><small>Δ ${x.dt>=0?"+":""}${x.dt.toFixed(1)} p.p.</small></td><td>${x.o.prize.toFixed(1)}%<br><small>Δ ${x.dp>=0?"+":""}${x.dp.toFixed(1)} p.p.</small></td><td>${labels[x.best.k]} ${x.best.avg.toFixed(3)}</td></tr>`).join("");
+ out.innerHTML=`<div class="report"><b>OMEGA AUDIT VERDIKTAS:</b> ${verdict}<br><br>
+ <b>V3.2 aplenkė Random blokų:</b> vid. pagr. ${wins.avg}/5 • ≥3 ${wins.three}/5 • prizinis ${wins.prize}/5 • visi 3 kartu ${wins.all}/5.<br>
+ <b>Visi 250:</b> vid. pagr. Δ ${DA>=0?"+":""}${DA.toFixed(3)} • ≥3 Δ ${DT>=0?"+":""}${DT.toFixed(1)} p.p. • prizinis Δ ${DP>=0?"+":""}${DP.toFixed(1)} p.p.</div>
+ <table><thead><tr><th>Blokas</th><th>Vid. pagr.</th><th>≥3 pagr.</th><th>Prizinis setas</th><th>Geriausias paprastas</th></tr></thead><tbody>${trs}</tbody></table>
+ <div class="notice" style="margin-top:12px"><b>GO taisyklė:</b> bendras 250 rezultatas turi būti teigiamas pagal visus 3 kriterijus, o pagerėjimas turi kartotis daugumoje 50 tiražų blokų. Vieno sėkmingo laikotarpio nepakanka.</div>`;
+ status.textContent="Baigta: 250 walk-forward testų, 5 × 50 chronologiniai blokai.";
+ btn.disabled=false;
+}
+
 </script>
 </body>
 </html>
