@@ -212,7 +212,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 <section class="card c6"><h2>Skaičių reputacija</h2><div id="numberReputation" class="scroll"></div></section>
 <section class="card c12"><h2>Mokymosi žurnalas</h2><div id="learningLog" class="scroll"><div class="status">Žurnalas tuščias.</div></div></section>
 <section class="card c12">
- <h2>OMEGA VALIDATION — sąžiningas egzaminas</h2>
+ <h2>OMEGA V3.0 — adaptuojamas ansamblis + walk-forward egzaminas</h2>
  <div class="toolbar">
   <button class="btn green" id="backtestBtn">Paleisti backtest</button>
   <label style="margin:0">Testo apimtis
@@ -226,6 +226,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
  </div>
  <div class="progress"><i id="backtestProgress"></i></div>
  <div id="backtestStatus" class="status">Validacija dar nepaleista. Ji parodys, ar OMEGA istorijoje realiai aplenkia atsitiktinę kontrolę. Testuojamas tik praeities duomenimis paremtas walk-forward režimas — be ateities informacijos.</div>
+ <div class="status"><b>V3.0 principas:</b> Frequency, Trend, Gap ir Hybrid svoriai nėra fiksuoti. Kiekviename walk-forward žingsnyje jie iš naujo parenkami tik iš ankstesnių tiražų vidinio kalibravimo. Komponentas, kuris tuo metu nepadeda, gali gauti 0 % svorį. Galutinis verdiktas lygina V3.0 ne tik su Random, bet ir su geriausiais paprastais modeliais.</div>
  <div id="backtestResults" class="scroll" style="margin-top:10px"></div>
 </section>
 
@@ -277,7 +278,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
  </div>
 </section>
 </main>
-<footer>OMEGA AI v2.7 • Eurojackpot • Adaptive Constraint Coverage • LocalStorage</footer>
+<footer>OMEGA AI v3.0 • Walk-forward Adaptive Ensemble • LocalStorage</footer>
 </div>
 
 <script>
@@ -1125,13 +1126,51 @@ function randomTickets(seed){
  }
  return tickets;
 }
+// V3.0: weights are earned only from earlier draws. No future draw is used.
+const V3_COMPONENTS=["frequency","trend","gap","hybrid"];
+function rankMapFor(history,kind){
+ const st=computeStats(history), arr=engineScores(st,kind);
+ return new Map(arr.map((x,i)=>[x.n,1-i/49]));
+}
+function v3WeightCandidates(){
+ const out=[],step=.25;
+ for(let a=0;a<=4;a++)for(let b=0;b<=4-a;b++)for(let c=0;c<=4-a-b;c++){
+  const d=4-a-b-c; out.push([a*step,b*step,c*step,d*step]);
+ }
+ return out;
+}
+const V3_WEIGHT_GRID=v3WeightCandidates();
+function adaptiveEnsembleWeights(history){
+ // Inner walk-forward calibration: last ~72 eligible historical targets, sampled every 3 draws.
+ const start=Math.max(120,history.length-216), samples=[];
+ for(let i=start;i<history.length;i+=3){
+  const h=history.slice(0,i),actual=history[i];
+  const maps=V3_COMPONENTS.map(k=>rankMapFor(h,k));
+  samples.push({maps,actual:new Set(actual.numbers)});
+ }
+ if(!samples.length)return {w:[.25,.25,.25,.25],score:0};
+ let best={w:[.25,.25,.25,.25],score:-1e9};
+ for(const w of V3_WEIGHT_GRID){
+  let score=0;
+  for(const s of samples){
+   const ranked=[];
+   for(let n=1;n<=50;n++){let z=0;for(let j=0;j<4;j++)z+=w[j]*(s.maps[j].get(n)||0);ranked.push([n,z]);}
+   ranked.sort((a,b)=>b[1]-a[1]);
+   // Reward actual numbers near the top, but do not overfit only TOP 5.
+   for(let r=0;r<ranked.length;r++)if(s.actual.has(ranked[r][0]))score+=(r<5?3:r<10?2:r<15?1:0)+1/(r+3);
+  }
+  // Tiny regularizer avoids extreme weights when evidence is tied.
+  score-=0.03*w.reduce((a,x)=>a+Math.pow(x-.25,2),0)*samples.length;
+  if(score>best.score)best={w:[...w],score};
+ }
+ return best;
+}
 function validationRanked(history,kind){
  const st=computeStats(history);
  if(kind!=="omega") return {st,ns:engineScores(st,kind)};
- const kinds=["frequency","trend","gap","hybrid"], maps=kinds.map(k=>new Map(engineScores(st,k).map((x,i)=>[x.n,1-i/49])));
- const ns=[];
- for(let n=1;n<=50;n++) ns.push({n,score:mean(maps.map(m=>m.get(n)||0)),gap:st.gaps[n]});
- ns.sort((a,b)=>b.score-a.score); return {st,ns};
+ const fit=adaptiveEnsembleWeights(history),maps=V3_COMPONENTS.map(k=>new Map(engineScores(st,k).map((x,i)=>[x.n,1-i/49]))),ns=[];
+ for(let n=1;n<=50;n++){let score=0;for(let j=0;j<4;j++)score+=fit.w[j]*(maps[j].get(n)||0);ns.push({n,score,gap:st.gaps[n]});}
+ ns.sort((a,b)=>b.score-a.score); return {st,ns,v3weights:fit.w};
 }
 function validationTickets(history,kind,seed){
  const {st,ns}=validationRanked(history,kind), map=new Map(ns.map(x=>[x.n,x.score])),rng=seeded(seed);
@@ -1164,20 +1203,23 @@ async function runBacktest(){
  const btn=$("backtestBtn");btn.disabled=true;
  const v=$("backtestSize").value,requested=v==="all"?draws.length:Number(v),start=Math.max(120,draws.length-requested),total=draws.length-start;
  const kinds=["omega","frequency","trend","gap","hybrid"],stats=Object.fromEntries([...kinds,"random"].map(k=>[k,blankValidation()]));
- $("backtestStatus").textContent="Vyksta V2.8 walk-forward egzaminas. Kiekviena prognozė kuriama tik iš tuo momentu buvusių tiražų; random kontrolė vidurkinama per 20 portfelių.";$("backtestProgress").style.width="1%";
+ $("backtestStatus").textContent="Vyksta V3.0 walk-forward egzaminas. Kiekviena prognozė kuriama tik iš tuo momentu buvusių tiražų; random kontrolė vidurkinama per 20 portfelių.";$("backtestProgress").style.width="1%";
  for(let i=start;i<draws.length;i++){
   const history=draws.slice(0,i),actual=draws[i];
   for(const kind of kinds)addValidation(stats[kind],validationTickets(history,kind,i*1009+kind.length*7919),actual);
   for(let r=0;r<20;r++)addValidation(stats.random,randomTickets(i*7919+r*104729),actual,1/20);
   if((i-start)%3===0){$("backtestProgress").style.width=(100*(i-start+1)/total)+"%";await new Promise(r=>setTimeout(r,0));}
  }
- const labels={omega:"OMEGA Core",frequency:"Frequency",trend:"Trend",gap:"Gap",hybrid:"Hybrid",random:"Random kontrolė"};
+ const labels={omega:"OMEGA V3 Adaptive",frequency:"Frequency",trend:"Trend",gap:"Gap",hybrid:"Hybrid",random:"Random kontrolė"};
  const rows=Object.entries(stats).map(([k,s])=>({k,label:labels[k],prize:100*s.setsPrize/s.tests,avgMain:s.totalMain/(s.tests*3),avgEuro:s.totalEuro/(s.tests*3),coverage:s.coverage/s.tests,d0:100*s.bestDist[0]/s.tests,d1:100*s.bestDist[1]/s.tests,d2:100*s.bestDist[2]/s.tests,d3:100*s.bestDist[3]/s.tests,e0:100*s.euroDist[0]/s.tests,e1:100*s.euroDist[1]/s.tests,e2:100*s.euroDist[2]/s.tests}));
- const rr=rows.find(x=>x.k==="random"),om=rows.find(x=>x.k==="omega"); rows.forEach(x=>{x.mainDelta=x.avgMain-rr.avgMain;x.threeDelta=x.d3-rr.d3;x.prizeDelta=x.prize-rr.prize});
- const evidence=(om.mainDelta>0?1:0)+(om.threeDelta>0?1:0)+(om.prizeDelta>0?1:0);
- const verdict=evidence===3?"🟢 OMEGA šiame horizonte aplenkė random pagal visus 3 pagrindinius kriterijus.":evidence>=2?"🟡 OMEGA turi dalinį pranašumo signalą, bet rezultatas nėra pakankamas vadinti sistemą įrodyta.":"🔴 OMEGA šiame horizonte neparodė patikimo pranašumo prieš random. Prognozavimo vertė neįrodyta.";
- $("backtestResults").innerHTML=`<div class="report" style="margin-bottom:12px"><b>V2.8 VERDIKTAS:</b> ${verdict}<br><small>Vertinama: vid. pagrindinių pataikymų, ≥3 pagrindinių dažnis ir bent vieno prizinio bilieto dažnis. Loterijos traukimai išlieka atsitiktiniai; teigiamas istorinis rezultatas negarantuoja būsimo pranašumo.</small></div><table><thead><tr><th>Modelis</th><th>0 pagr.</th><th>1 pagr.</th><th>2 pagr.</th><th>≥3 pagr.</th><th>Vid. pagr./bil.</th><th>Vid. Euro/bil.</th><th>Prizinis setas</th><th>Aprėptis</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${x.label}</b>${x.k==="omega"?`<br><small>Δ main ${x.mainDelta>=0?"+":""}${x.mainDelta.toFixed(3)} • Δ≥3 ${x.threeDelta>=0?"+":""}${x.threeDelta.toFixed(1)} p.p.</small>`:""}</td><td>${x.d0.toFixed(1)}%</td><td>${x.d1.toFixed(1)}%</td><td>${x.d2.toFixed(1)}%</td><td>${x.d3.toFixed(1)}%</td><td>${x.avgMain.toFixed(3)}</td><td>${x.avgEuro.toFixed(3)}</td><td>${x.prize.toFixed(1)}%</td><td>${x.coverage.toFixed(1)}/15</td></tr>`).join("")}</tbody></table>`;
- $("backtestStatus").textContent=`Baigta: ${total} visiškai atskirtų walk-forward testų. OMEGA Core prieš random: vid. pagr. ${om.mainDelta>=0?"+":""}${om.mainDelta.toFixed(3)}, ≥3 ${om.threeDelta>=0?"+":""}${om.threeDelta.toFixed(1)} p.p., prizinis setas ${om.prizeDelta>=0?"+":""}${om.prizeDelta.toFixed(1)} p.p.`;
+ const rr=rows.find(x=>x.k==="random"),om=rows.find(x=>x.k==="omega"),simple=rows.filter(x=>!["omega","random"].includes(x.k));
+ rows.forEach(x=>{x.mainDelta=x.avgMain-rr.avgMain;x.threeDelta=x.d3-rr.d3;x.prizeDelta=x.prize-rr.prize});
+ const bestSimple={main:Math.max(...simple.map(x=>x.avgMain)),three:Math.max(...simple.map(x=>x.d3)),prize:Math.max(...simple.map(x=>x.prize))};
+ const vsRandom=(om.avgMain>rr.avgMain?1:0)+(om.d3>rr.d3?1:0)+(om.prize>rr.prize?1:0);
+ const vsSimple=(om.avgMain>bestSimple.main?1:0)+(om.d3>bestSimple.three?1:0)+(om.prize>bestSimple.prize?1:0);
+ const verdict=vsRandom===3&&vsSimple>=2?"🟢 V3.0 parodė stiprų signalą: aplenkė Random pagal visus 3 kriterijus ir bent 2/3 geriausių paprastų kontrolinių rezultatų.":vsRandom>=2&&vsSimple>=1?"🟡 V3.0 turi dalinį signalą, bet dar nepakanka teigti stabilų pranašumą prieš paprastus modelius.":"🔴 V3.0 neįrodė pranašumo. Sudėtingesnis ansamblis šiuo horizontu nėra geresnis už kontrolinius modelius.";
+ $("backtestResults").innerHTML=`<div class="report" style="margin-bottom:12px"><b>V3.0 VERDIKTAS:</b> ${verdict}<br><small>Vertinama: vid. pagrindinių pataikymų, ≥3 pagrindinių dažnis ir bent vieno prizinio bilieto dažnis. Loterijos traukimai išlieka atsitiktiniai; teigiamas istorinis rezultatas negarantuoja būsimo pranašumo.</small></div><table><thead><tr><th>Modelis</th><th>0 pagr.</th><th>1 pagr.</th><th>2 pagr.</th><th>≥3 pagr.</th><th>Vid. pagr./bil.</th><th>Vid. Euro/bil.</th><th>Prizinis setas</th><th>Aprėptis</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${x.label}</b>${x.k==="omega"?`<br><small>Δ main ${x.mainDelta>=0?"+":""}${x.mainDelta.toFixed(3)} • Δ≥3 ${x.threeDelta>=0?"+":""}${x.threeDelta.toFixed(1)} p.p.</small>`:""}</td><td>${x.d0.toFixed(1)}%</td><td>${x.d1.toFixed(1)}%</td><td>${x.d2.toFixed(1)}%</td><td>${x.d3.toFixed(1)}%</td><td>${x.avgMain.toFixed(3)}</td><td>${x.avgEuro.toFixed(3)}</td><td>${x.prize.toFixed(1)}%</td><td>${x.coverage.toFixed(1)}/15</td></tr>`).join("")}</tbody></table>`;
+ $("backtestStatus").textContent=`Baigta: ${total} visiškai atskirtų walk-forward testų. OMEGA V3 prieš random: vid. pagr. ${om.mainDelta>=0?"+":""}${om.mainDelta.toFixed(3)}, ≥3 ${om.threeDelta>=0?"+":""}${om.threeDelta.toFixed(1)} p.p., prizinis setas ${om.prizeDelta>=0?"+":""}${om.prizeDelta.toFixed(1)} p.p.`;
  $("backtestProgress").style.width="100%";btn.disabled=false;
 }
 $("backtestBtn").onclick=runBacktest;
