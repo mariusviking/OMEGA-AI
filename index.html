@@ -325,7 +325,31 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="v34Results" class="scroll" style="margin-top:12px"></div>
 </section>
 
-<footer>OMEGA AI v3.4 • Non-Overlap Confirmation • 10×10 + 5×20 • LocalStorage</footer>
+
+<section class="card c12" id="v35RegimeCard">
+  <h2>OMEGA V3.5 — Regime Detector Validation</h2>
+  <p>
+    V3.5 nekeičia OMEGA skaičių formulės. Jis tikrina, ar galima <b>prieš kitą tiražą</b>,
+    naudojant tik tuo momentu jau žinomus ankstesnių walk-forward rezultatų duomenis,
+    atskirti laikotarpius, kai OMEGA signalas yra „ON“, nuo laikotarpių, kai jis „OFF“.
+  </p>
+  <div class="notice">
+    <b>Svarbi taisyklė:</b> režimo būsena kiekvienam tikrinamam tiražui apskaičiuojama tik iš
+    ankstesnių rezultatų. Tikrinamo tiražo rezultatas į vartus nepatenka. Taip išvengiama
+    tiesioginio „žiūrėjimo į ateitį“.
+  </div>
+  <div class="toolbar" style="margin-top:14px">
+    <button class="btn green" id="runV35Btn" onclick="runV35RegimeValidation()">
+      Paleisti V3.5 režimo validaciją
+    </button>
+  </div>
+  <div id="v35Status" class="status">
+    Bus atliekamas meta walk-forward auditas su užšaldyta režimo taisykle.
+  </div>
+  <div id="v35Results" class="scroll" style="margin-top:12px"></div>
+</section>
+
+<footer>OMEGA AI v3.5 • Regime Detector Validation • Meta Walk-forward • LocalStorage</footer>
 </div>
 
 <script>
@@ -1674,6 +1698,198 @@ async function runV34Confirmation(){
     </div>`;
 
   status.textContent="Baigta: 100 walk-forward testų • 10×10 ir 5×20 nepersidengiantys blokai.";
+  btn.disabled=false;
+}
+
+async function runV35RegimeValidation(){
+  const btn=$("runV35Btn"), status=$("v35Status"), out=$("v35Results");
+  btn.disabled=true; out.innerHTML="";
+  const H=Math.min(300,draws.length-120);
+  const MIN_META=60, RECENT=30, PRIOR=30;
+
+  if(H < MIN_META+40){
+    status.textContent="Nepakanka istorijos V3.5 meta walk-forward validacijai.";
+    btn.disabled=false; return;
+  }
+
+  status.textContent=`Kuriami ${H} chronologinių walk-forward rezultatų ir tikrinamas režimo vartas…`;
+
+  function oneResult(history,actual,i){
+    const so=blankValidation(), sr=blankValidation();
+    addValidation(so,validationTickets(history,"omega",i*1009+5*7919),actual);
+    for(let r=0;r<20;r++) addValidation(sr,randomTickets(i*7919+r*104729),actual,1/20);
+    return {
+      date:actual.date,
+      omega:so, random:sr,
+      mainO:so.totalMain/3, mainR:sr.totalMain/3,
+      threeO:so.bestDist[3], threeR:sr.bestDist[3],
+      prizeO:so.setsPrize, prizeR:sr.setsPrize
+    };
+  }
+
+  function aggregate(rs){
+    if(!rs.length) return {n:0,dm:0,d3:0,dp:0,score:0,pos:0};
+    let dm=0,d3=0,dp=0;
+    for(const x of rs){
+      dm += x.mainO-x.mainR;
+      d3 += x.threeO-x.threeR;
+      dp += x.prizeO-x.prizeR;
+    }
+    dm/=rs.length;
+    d3=100*d3/rs.length;
+    dp=100*dp/rs.length;
+    const pos=(dm>0?1:0)+(d3>0?1:0)+(dp>0?1:0);
+    // Iš anksto užšaldytas normalizavimas: ~0.05 pagr., 2 p.p. ≥3 ir 3 p.p. priziniam laikomi panašaus masto signalu.
+    const score=(dm/0.05 + d3/2.0 + dp/3.0)/3;
+    return {n:rs.length,dm,d3,dp,score,pos};
+  }
+
+  // Fiksuota, nedinamiškai optimizuojama V3.5 taisyklė.
+  function regimeFromPast(past){
+    if(past.length < MIN_META) return {mode:"WARMUP",score:0,recent:null,prior:null};
+    const recent=aggregate(past.slice(-RECENT));
+    const prior=aggregate(past.slice(-(RECENT+PRIOR),-RECENT));
+    const acceleration=recent.score-prior.score;
+
+    // ON: paskutiniai 30 turi bent 2/3 teigiamų kriterijų, teigiamą bendrą score,
+    // ir negali būti aiškiai blogėjantys prieš ankstesnius 30.
+    const on = recent.pos>=2 && recent.score>=0.35 && acceleration>=-0.20;
+    // STRONG ON: griežtesnė diagnostinė būsena; prognozės formulės nekeičia.
+    const strong = recent.pos===3 && recent.score>=0.75 && acceleration>=0;
+    return {mode:strong?"STRONG ON":on?"ON":"OFF",score:recent.score,acceleration,recent,prior};
+  }
+
+  const start=draws.length-H, rows=[];
+  for(let i=start;i<draws.length;i++){
+    const history=draws.slice(0,i), actual=draws[i];
+    const gate=regimeFromPast(rows);
+    const rr=oneResult(history,actual,i);
+    rr.gate=gate;
+    rows.push(rr);
+    if((i-start)%4===0){
+      status.textContent=`Skaičiuojama ${i-start+1}/${H}…`;
+      await new Promise(r=>setTimeout(r,0));
+    }
+  }
+
+  const tested=rows.filter(x=>x.gate.mode!=="WARMUP");
+  const onRows=tested.filter(x=>x.gate.mode==="ON"||x.gate.mode==="STRONG ON");
+  const strongRows=tested.filter(x=>x.gate.mode==="STRONG ON");
+  const offRows=tested.filter(x=>x.gate.mode==="OFF");
+
+  function performance(rs){
+    if(!rs.length) return {n:0,dm:0,d3:0,dp:0,omegaMain:0,randomMain:0,omegaPrize:0,randomPrize:0};
+    let om=0,rm=0,o3=0,r3=0,op=0,rp=0;
+    for(const x of rs){
+      om+=x.mainO; rm+=x.mainR; o3+=x.threeO; r3+=x.threeR; op+=x.prizeO; rp+=x.prizeR;
+    }
+    const n=rs.length;
+    return {
+      n, omegaMain:om/n, randomMain:rm/n, dm:(om-rm)/n,
+      d3:100*(o3-r3)/n, dp:100*(op-rp)/n,
+      omegaPrize:100*op/n, randomPrize:100*rp/n
+    };
+  }
+
+  const P=performance(tested), ON=performance(onRows), STR=performance(strongRows), OFF=performance(offRows);
+
+  // Chronologiniai nepriklausomi patikrinimo blokai po ~40 testuojamų tiražų.
+  function blocks(rs,k=5){
+    const arr=[], size=Math.floor(rs.length/k);
+    if(size<1) return arr;
+    for(let b=0;b<k;b++){
+      const a=b*size, z=(b===k-1?rs.length:(b+1)*size), chunk=rs.slice(a,z);
+      const on=chunk.filter(x=>x.gate.mode==="ON"||x.gate.mode==="STRONG ON");
+      const off=chunk.filter(x=>x.gate.mode==="OFF");
+      arr.push({
+        n:b+1, from:chunk[0]?.date||"", to:chunk[chunk.length-1]?.date||"",
+        on:performance(on), off:performance(off)
+      });
+    }
+    return arr;
+  }
+  const bs=blocks(tested,5);
+  const onPositiveBlocks=bs.filter(b=>b.on.n>=5 && b.on.dm>0 && ((b.on.d3>0?1:0)+(b.on.dp>0?1:0)>=1)).length;
+  const offNonPositiveBlocks=bs.filter(b=>b.off.n>=5 && b.off.dm<=0).length;
+
+  // Dabartinė būsena skaičiuojama tik iš jau įvykusių auditinių rezultatų.
+  const currentGate=regimeFromPast(rows);
+
+  let verdict="🔴 NO VALIDATED REGIME — režimo vartas neparodė pakankamai patikimo atskyrimo.";
+  let cls="nogo";
+  const enoughOn=ON.n>=30;
+  const onGood=enoughOn && ON.dm>0.025 && ((ON.d3>0?1:0)+(ON.dp>0?1:0)>=1);
+  const separation=enoughOn && (ON.dm-OFF.dm)>0.035;
+  const blockSupport=onPositiveBlocks>=3;
+
+  if(onGood && separation && blockSupport){
+    verdict="🟢 REGIME SIGNAL VALIDATED — iš anksto apskaičiuojama ON būsena istoriškai atskyrė geresnį OMEGA laikotarpį nuo OFF.";
+    cls="go";
+  }else if(enoughOn && ON.dm>0 && separation){
+    verdict="🟡 PARTIAL REGIME SIGNAL — ON būsena buvo geresnė už OFF, bet stabilumo arba kriterijų palaikymo dar nepakanka.";
+    cls="maybe";
+  }
+
+  function fmt(x,d=3){return `${x>=0?"+":""}${x.toFixed(d)}`;}
+  function perfLine(name,x){
+    if(!x.n) return `<b>${name}:</b> nėra pakankamai testų.`;
+    return `<b>${name} (${x.n}):</b> vid. pagr. Δ ${fmt(x.dm)} • ≥3 Δ ${fmt(x.d3,1)} p.p. • prizinis Δ ${fmt(x.dp,1)} p.p.`;
+  }
+
+  const blockRows=bs.map(b=>{
+    const mark=b.on.n>=5 && b.on.dm>0 && ((b.on.d3>0?1:0)+(b.on.dp>0?1:0)>=1)?"🟢":"🔴";
+    return `<tr>
+      <td>${mark} ${b.n}<br><small>${b.from} → ${b.to}</small></td>
+      <td>${b.on.n}</td>
+      <td>${b.on.n?fmt(b.on.dm):"—"}</td>
+      <td>${b.on.n?fmt(b.on.d3,1):"—"}</td>
+      <td>${b.on.n?fmt(b.on.dp,1):"—"}</td>
+      <td>${b.off.n}</td>
+      <td>${b.off.n?fmt(b.off.dm):"—"}</td>
+    </tr>`;
+  }).join("");
+
+  out.innerHTML=`
+    <div class="report ${cls}">
+      <b>V3.5 VERDIKTAS:</b> ${verdict}<br><br>
+      ${perfLine("Visi testuojami tiražai",P)}<br>
+      ${perfLine("OMEGA ON",ON)}<br>
+      ${perfLine("STRONG ON",STR)}<br>
+      ${perfLine("OMEGA OFF",OFF)}<br><br>
+
+      <b>ON–OFF skirtumas:</b> vid. pagr. ${fmt(ON.dm-OFF.dm)}.<br>
+      <b>Chronologiniai blokai:</b> ON signalą palaiko ${onPositiveBlocks}/5 blokų;
+      OFF pagrindinių pranašumas neigiamas ${offNonPositiveBlocks}/5 blokų.<br><br>
+
+      <b>Dabartinė užšaldyto vartų taisyklės būsena:</b>
+      ${currentGate.mode} • score ${currentGate.score.toFixed(2)}
+      ${currentGate.acceleration!==undefined?` • pagreitis ${fmt(currentGate.acceleration,2)}`:""}.
+    </div>
+
+    <div class="notice" style="margin-top:12px">
+      <b>Kaip veikia vartai:</b> prieš kiekvieną tiražą imami tik 60 ankstesnių OMEGA-vs-Random
+      walk-forward rezultatų. Paskutiniai 30 lyginami su prieš juos buvusiais 30.
+      ON leidžiamas tik kai bent 2 iš 3 kriterijų yra teigiami, bendras normalizuotas signalas
+      ≥ 0.35 ir nauja forma nėra smarkiai blogesnė už ankstesnę. Šios ribos šiame V3.5 teste
+      yra fiksuotos ir testo metu neoptimizuojamos.
+    </div>
+
+    <h3 style="margin-top:22px">V3.5 chronologinis stabilumas</h3>
+    <table>
+      <thead><tr>
+        <th>Blokas</th><th>ON n</th><th>ON Δ pagr.</th><th>ON Δ ≥3</th><th>ON Δ priz.</th><th>OFF n</th><th>OFF Δ pagr.</th>
+      </tr></thead>
+      <tbody>${blockRows}</tbody>
+    </table>
+
+    <div class="notice" style="margin-top:12px">
+      <b>Interpretacija:</b> šis testas yra griežtesnis už V3.3/V3.4, nes režimas turi būti
+      nustatytas prieš tikrinamo tiražo rezultatą. Vis dėlto tai dar nėra visiškai nepriklausomas
+      būsimas testas, nes V3.5 vartų idėja sukurta jau pamačius ankstesnius auditus.
+      Tikras galutinis patvirtinimas būtų užšaldyti V3.5 taisyklę ir vertinti naujus būsimus tiražus jos nekeičiant.
+    </div>`;
+
+  status.textContent=`Baigta: ${tested.length} meta walk-forward testų po ${MIN_META} warm-up rezultatų.`;
   btn.disabled=false;
 }
 
