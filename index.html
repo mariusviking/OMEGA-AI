@@ -289,7 +289,25 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 </section>
 
 </main>
-<footer>OMEGA AI v3.2 AUDIT • Regime-Gated • 5×50 Walk-forward • LocalStorage</footer>
+
+<section class="card c12" id="recentRegimeCard">
+  <h2>OMEGA V3.3 — Recent Regime Hypothesis</h2>
+  <p>
+    Šis testas nekeičia prognozavimo formulės. Jis tikrina, ar naujausio laikotarpio pagerėjimas
+    yra tęstinis signalas, ar vienas atsitiktinis 50 tiražų šuolis.
+  </p>
+  <div class="toolbar">
+    <button class="btn green" id="runRecentRegimeBtn" onclick="runRecentRegimeAudit()">
+      Paleisti slenkantį auditą
+    </button>
+  </div>
+  <div id="recentRegimeStatus" class="status">
+    Bus skaičiuojami 50 tiražų slenkantys langai, paslenkant juos kas 10 tiražų.
+  </div>
+  <div id="recentRegimeResults" class="scroll" style="margin-top:12px"></div>
+</section>
+
+<footer>OMEGA AI v3.3 • Recent Regime Hypothesis • Rolling 50/10 Audit • LocalStorage</footer>
 </div>
 
 <script>
@@ -1366,6 +1384,144 @@ async function runOmegaAudit(){
  <div class="notice" style="margin-top:12px"><b>GO taisyklė:</b> bendras 250 rezultatas turi būti teigiamas pagal visus 3 kriterijus, o pagerėjimas turi kartotis daugumoje 50 tiražų blokų. Vieno sėkmingo laikotarpio nepakanka.</div>`;
  status.textContent="Baigta: 250 walk-forward testų, 5 × 50 chronologiniai blokai.";
  btn.disabled=false;
+}
+
+
+
+async function runRecentRegimeAudit(){
+  const btn=$("runRecentRegimeBtn"), status=$("recentRegimeStatus"), out=$("recentRegimeResults");
+  btn.disabled=true; out.innerHTML="";
+  const WINDOW=50, STEP=10, TEST_HORIZON=Math.min(250, draws.length-120);
+  if(TEST_HORIZON < WINDOW){
+    status.textContent="Nepakanka istorijos slenkančiam auditui.";
+    btn.disabled=false; return;
+  }
+
+  status.textContent="Skaičiuojami slenkantys 50 tiražų langai…";
+  const kinds=["omega","random"];
+  const start=draws.length-TEST_HORIZON;
+  const rows=[];
+
+  function blank(){
+    return {tests:0,totalMain:0,totalEuro:0,setsPrize:0,coverage:0,bestDist:[0,0,0,0],euroDist:[0,0,0]};
+  }
+  function metrics(s){
+    return {
+      avg:s.totalMain/(s.tests*3),
+      three:100*s.bestDist[3]/s.tests,
+      prize:100*s.setsPrize/s.tests
+    };
+  }
+
+  for(let i=start;i<draws.length;i++){
+    const history=draws.slice(0,i), actual=draws[i], one={date:actual.date,s:{}};
+    for(const kind of kinds){
+      const s=blank();
+      if(kind==="random"){
+        for(let r=0;r<20;r++) addValidation(s,randomTickets(i*7919+r*104729),actual,1/20);
+      }else{
+        addValidation(s,validationTickets(history,"omega",i*1009+5*7919),actual);
+      }
+      one.s[kind]=s;
+    }
+    rows.push(one);
+    if((i-start)%8===0){
+      status.textContent=`Skaičiuojama ${i-start+1}/${TEST_HORIZON}…`;
+      await new Promise(r=>setTimeout(r,0));
+    }
+  }
+
+  function merge(slice,kind){
+    const z=blank();
+    for(const row of slice){
+      const s=row.s[kind];
+      z.tests+=s.tests; z.totalMain+=s.totalMain; z.totalEuro+=s.totalEuro;
+      z.setsPrize+=s.setsPrize; z.coverage+=s.coverage;
+      for(let j=0;j<4;j++) z.bestDist[j]+=s.bestDist[j];
+      for(let j=0;j<3;j++) z.euroDist[j]+=s.euroDist[j];
+    }
+    return z;
+  }
+
+  const windows=[];
+  for(let pos=0; pos+WINDOW<=rows.length; pos+=STEP){
+    const slice=rows.slice(pos,pos+WINDOW);
+    const o=metrics(merge(slice,"omega")), r=metrics(merge(slice,"random"));
+    const da=o.avg-r.avg, dt=o.three-r.three, dp=o.prize-r.prize;
+    const score=(da>0?1:0)+(dt>0?1:0)+(dp>0?1:0);
+    windows.push({
+      n:windows.length+1, from:slice[0].date, to:slice[slice.length-1].date,
+      o,r,da,dt,dp,score
+    });
+  }
+
+  // Analyse only information that was actually observed by the rolling audit.
+  const recent=windows.slice(-3);
+  const prior=windows.slice(0,-3);
+  const recentPositive = recent.filter(w=>w.da>0 && w.dt>0 && w.dp>0).length;
+  const recentTwoPlus = recent.filter(w=>w.score>=2).length;
+  const latest=windows[windows.length-1];
+  const prev=windows.length>1?windows[windows.length-2]:null;
+
+  let verdict, cls;
+  if(recent.length===3 && recentPositive===3){
+    verdict="🟢 PERSISTENT — paskutiniai 3 slenkantys langai visi lenkia Random pagal visus 3 kriterijus.";
+    cls="go";
+  } else if(recent.length===3 && recentTwoPlus>=2 && latest.score>=2){
+    verdict="🟡 RECENT SIGNAL — naujausiuose languose matomas dalinis pasikartojantis pagerėjimas, bet jis dar nėra pakankamai stabilus.";
+    cls="maybe";
+  } else {
+    verdict="🔴 TRANSIENT / NO SIGNAL — naujausio 50 tiražų pagerėjimas nepasikartoja pakankamai nuosekliai slenkančiuose languose.";
+    cls="nogo";
+  }
+
+  // Trend of deltas over last up to 5 windows, only descriptive.
+  const tail=windows.slice(-5);
+  function slope(arr,key){
+    if(arr.length<2) return 0;
+    const n=arr.length, mx=(n-1)/2, my=arr.reduce((a,x)=>a+x[key],0)/n;
+    let num=0,den=0;
+    arr.forEach((x,i)=>{num+=(i-mx)*(x[key]-my);den+=(i-mx)*(i-mx);});
+    return den?num/den:0;
+  }
+  const sa=slope(tail,"da"), st=slope(tail,"dt"), sp=slope(tail,"dp");
+  const trendTxt =
+    (sa>0 && st>0 && sp>0) ? "stiprėja pagal visus 3 kriterijus" :
+    (sa<0 && st<0 && sp<0) ? "silpnėja pagal visus 3 kriterijus" :
+    "mišrus — kriterijai juda skirtingomis kryptimis";
+
+  const trs=windows.map((w,idx)=>{
+    const isRecent=idx>=windows.length-3;
+    const mark=w.score===3?"🟢":w.score>=2?"🟡":"🔴";
+    return `<tr${isRecent?' style="font-weight:700"':''}>
+      <td>${mark} ${w.n}<br><small>${w.from} → ${w.to}</small></td>
+      <td>${w.o.avg.toFixed(3)}<br><small>Δ ${w.da>=0?"+":""}${w.da.toFixed(3)}</small></td>
+      <td>${w.o.three.toFixed(1)}%<br><small>Δ ${w.dt>=0?"+":""}${w.dt.toFixed(1)} p.p.</small></td>
+      <td>${w.o.prize.toFixed(1)}%<br><small>Δ ${w.dp>=0?"+":""}${w.dp.toFixed(1)} p.p.</small></td>
+      <td>${w.score}/3</td>
+    </tr>`;
+  }).join("");
+
+  out.innerHTML=`
+    <div class="report">
+      <b>RECENT REGIME VERDIKTAS:</b> ${verdict}<br><br>
+      <b>Langai:</b> ${windows.length} × 50 tiražų, poslinkis 10 tiražų.<br>
+      <b>Paskutiniai 3:</b> visi 3 kriterijai teigiami ${recentPositive}/3 • bent 2 kriterijai teigiami ${recentTwoPlus}/3.<br>
+      <b>Naujausias langas:</b> vid. pagr. Δ ${latest.da>=0?"+":""}${latest.da.toFixed(3)} • ≥3 Δ ${latest.dt>=0?"+":""}${latest.dt.toFixed(1)} p.p. • prizinis Δ ${latest.dp>=0?"+":""}${latest.dp.toFixed(1)} p.p.<br>
+      <b>Paskutinių ${tail.length} langų kryptis:</b> ${trendTxt}.
+    </div>
+    <table>
+      <thead><tr><th>Langas</th><th>Vid. pagr.</th><th>≥3 pagr.</th><th>Prizinis setas</th><th>Teigiami</th></tr></thead>
+      <tbody>${trs}</tbody>
+    </table>
+    <div class="notice" style="margin-top:12px">
+      <b>Interpretacija:</b> langai persidengia, todėl tai nėra ${windows.length} nepriklausomų bandymų.
+      Šis auditas skirtas nustatyti, ar paskutinio laikotarpio pagerėjimas atsirado palaipsniui ir išsilaiko.
+      Jis nekeičia OMEGA formulės ir neoptimizuoja jos pagal šiuos rezultatus.
+    </div>`;
+
+  status.textContent=`Baigta: ${windows.length} slenkančių langų po 50 tiražų, poslinkis kas 10.`;
+  btn.disabled=false;
 }
 
 </script>
