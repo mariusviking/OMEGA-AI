@@ -307,7 +307,25 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="recentRegimeResults" class="scroll" style="margin-top:12px"></div>
 </section>
 
-<footer>OMEGA AI v3.3 • Recent Regime Hypothesis • Rolling 50/10 Audit • LocalStorage</footer>
+
+<section class="card c12" id="v34ConfirmCard">
+  <h2>OMEGA V3.4 — Non-Overlap Confirmation</h2>
+  <p>
+    Šis testas nekeičia ir neperoptimizuoja OMEGA formulės. Jis tikrina V3.3 aptiktą naujausio
+    laikotarpio signalą nepriklausomais, tarpusavyje nepersidengiančiais blokais.
+  </p>
+  <div class="toolbar">
+    <button class="btn green" id="runV34Btn" onclick="runV34Confirmation()">
+      Paleisti V3.4 patvirtinimą
+    </button>
+  </div>
+  <div id="v34Status" class="status">
+    Bus tikrinami tie patys naujausi 100 tiražų dviem pjūviais: 10 × 10 ir 5 × 20.
+  </div>
+  <div id="v34Results" class="scroll" style="margin-top:12px"></div>
+</section>
+
+<footer>OMEGA AI v3.4 • Non-Overlap Confirmation • 10×10 + 5×20 • LocalStorage</footer>
 </div>
 
 <script>
@@ -1521,6 +1539,141 @@ async function runRecentRegimeAudit(){
     </div>`;
 
   status.textContent=`Baigta: ${windows.length} slenkančių langų po 50 tiražų, poslinkis kas 10.`;
+  btn.disabled=false;
+}
+
+
+async function runV34Confirmation(){
+  const btn=$("runV34Btn"), status=$("v34Status"), out=$("v34Results");
+  btn.disabled=true; out.innerHTML="";
+  const H=100;
+  if(draws.length < H+120){
+    status.textContent="Nepakanka istorijos V3.4 patvirtinimui.";
+    btn.disabled=false; return;
+  }
+
+  status.textContent="Skaičiuojami 100 naujausių visiškai atskirų walk-forward testų…";
+
+  function blank(){
+    return {tests:0,totalMain:0,totalEuro:0,setsPrize:0,coverage:0,bestDist:[0,0,0,0],euroDist:[0,0,0]};
+  }
+  function met(s){
+    return {avg:s.totalMain/(s.tests*3),three:100*s.bestDist[3]/s.tests,prize:100*s.setsPrize/s.tests};
+  }
+  function merge(rs,kind){
+    const z=blank();
+    for(const row of rs){
+      const s=row.s[kind];
+      z.tests+=s.tests; z.totalMain+=s.totalMain; z.totalEuro+=s.totalEuro;
+      z.setsPrize+=s.setsPrize; z.coverage+=s.coverage;
+      for(let j=0;j<4;j++) z.bestDist[j]+=s.bestDist[j];
+      for(let j=0;j<3;j++) z.euroDist[j]+=s.euroDist[j];
+    }
+    return z;
+  }
+
+  const start=draws.length-H, rows=[];
+  for(let i=start;i<draws.length;i++){
+    const history=draws.slice(0,i), actual=draws[i], one={date:actual.date,s:{}};
+    const so=blank(), sr=blank();
+    addValidation(so,validationTickets(history,"omega",i*1009+5*7919),actual);
+    for(let r=0;r<20;r++) addValidation(sr,randomTickets(i*7919+r*104729),actual,1/20);
+    one.s.omega=so; one.s.random=sr;
+    one.mainDelta=(so.totalMain/3)-(sr.totalMain/3);
+    rows.push(one);
+    if((i-start)%5===0){
+      status.textContent=`Skaičiuojama ${i-start+1}/${H}…`;
+      await new Promise(r=>setTimeout(r,0));
+    }
+  }
+
+  function blocks(size){
+    const arr=[];
+    for(let p=0;p+size<=rows.length;p+=size){
+      const rs=rows.slice(p,p+size), o=met(merge(rs,"omega")), r=met(merge(rs,"random"));
+      const da=o.avg-r.avg, dt=o.three-r.three, dp=o.prize-r.prize;
+      arr.push({
+        n:arr.length+1,from:rs[0].date,to:rs[rs.length-1].date,o,r,da,dt,dp,
+        score:(da>0?1:0)+(dt>0?1:0)+(dp>0?1:0)
+      });
+    }
+    return arr;
+  }
+
+  const b10=blocks(10), b20=blocks(20);
+  const allO=met(merge(rows,"omega")), allR=met(merge(rows,"random"));
+  const DA=allO.avg-allR.avg, DT=allO.three-allR.three, DP=allO.prize-allR.prize;
+
+  function summary(bs){
+    return {
+      avg:bs.filter(x=>x.da>0).length,
+      three:bs.filter(x=>x.dt>0).length,
+      prize:bs.filter(x=>x.dp>0).length,
+      all:bs.filter(x=>x.score===3).length,
+      two:bs.filter(x=>x.score>=2).length
+    };
+  }
+  const s10=summary(b10), s20=summary(b20);
+
+  // Patikriname, ar bendrą pagrindinių pataikymų pranašumą sukuria vos keli tiražai.
+  const positive=rows.map(x=>Math.max(0,x.mainDelta)).sort((a,b)=>b-a);
+  const posSum=positive.reduce((a,b)=>a+b,0);
+  const top10=positive.slice(0,10).reduce((a,b)=>a+b,0);
+  const concentration=posSum>0?100*top10/posSum:100;
+
+  // Griežta taisyklė: abu nepriklausomi pjūviai turi rodyti daugumos palaikymą,
+  // o visas 100 tiražų laikotarpis negali būti neigiamas pagal pagrindinį kriterijų.
+  const strong10=s10.two>=7 && s10.avg>=6;
+  const strong20=s20.two>=4 && s20.avg>=3;
+  const broad=DA>0 && (DT>0 || DP>0);
+  const notConcentrated=concentration<60;
+
+  let verdict, cls;
+  if(strong10 && strong20 && broad && notConcentrated){
+    verdict="🟢 CONFIRMED — naujausio režimo signalas išlieka ir nepersidengiančiuose blokuose.";
+    cls="go";
+  }else if(broad && (strong10 || strong20)){
+    verdict="🟡 PARTIAL — dalis naujausio režimo signalo išlieka, bet nepriklausomas patvirtinimas dar nepakankamai stabilus.";
+    cls="maybe";
+  }else{
+    verdict="🔴 REJECTED / NO CONFIRMATION — V3.3 žalias slenkančių langų signalas nepriklausomuose blokuose nepasitvirtino.";
+    cls="nogo";
+  }
+
+  function table(bs,title){
+    const trs=bs.map(x=>{
+      const mark=x.score===3?"🟢":x.score>=2?"🟡":"🔴";
+      return `<tr>
+        <td>${mark} ${x.n}<br><small>${x.from} → ${x.to}</small></td>
+        <td>${x.o.avg.toFixed(3)}<br><small>Δ ${x.da>=0?"+":""}${x.da.toFixed(3)}</small></td>
+        <td>${x.o.three.toFixed(1)}%<br><small>Δ ${x.dt>=0?"+":""}${x.dt.toFixed(1)} p.p.</small></td>
+        <td>${x.o.prize.toFixed(1)}%<br><small>Δ ${x.dp>=0?"+":""}${x.dp.toFixed(1)} p.p.</small></td>
+        <td>${x.score}/3</td>
+      </tr>`;
+    }).join("");
+    return `<h3 style="margin-top:22px">${title}</h3>
+      <table><thead><tr><th>Blokas</th><th>Vid. pagr.</th><th>≥3 pagr.</th><th>Prizinis setas</th><th>Teigiami</th></tr></thead>
+      <tbody>${trs}</tbody></table>`;
+  }
+
+  out.innerHTML=`
+    <div class="report ${cls}">
+      <b>V3.4 VERDIKTAS:</b> ${verdict}<br><br>
+      <b>Visi 100 tiražų:</b> vid. pagr. Δ ${DA>=0?"+":""}${DA.toFixed(3)} • ≥3 Δ ${DT>=0?"+":""}${DT.toFixed(1)} p.p. • prizinis Δ ${DP>=0?"+":""}${DP.toFixed(1)} p.p.<br>
+      <b>10 × 10:</b> vid. pagr. teigiami ${s10.avg}/10 • ≥3 ${s10.three}/10 • prizinis ${s10.prize}/10 • bent 2/3 kriterijų ${s10.two}/10 • visi 3 ${s10.all}/10.<br>
+      <b>5 × 20:</b> vid. pagr. teigiami ${s20.avg}/5 • ≥3 ${s20.three}/5 • prizinis ${s20.prize}/5 • bent 2/3 kriterijų ${s20.two}/5 • visi 3 ${s20.all}/5.<br>
+      <b>Koncentracijos testas:</b> 10 stipriausių pavienių tiražų sudaro ${concentration.toFixed(1)}% viso teigiamo pagrindinių pataikymų indėlio.
+    </div>
+    ${table(b10,"10 × 10 — nepersidengiantys blokai")}
+    ${table(b20,"5 × 20 — nepersidengiantys blokai")}
+    <div class="notice" style="margin-top:12px">
+      <b>Svarbu:</b> V3.4 formulės nekeičia. Abu pjūviai naudoja tuos pačius 100 naujausių tiražų,
+      tačiau kiekvieno pjūvio viduje blokai visiškai nepersidengia. 10×10 ir 5×20 todėl nėra dvi
+      atskiros 100 tiražų imtys — tai du skirtingi tos pačios imties stabilumo patikrinimai.
+      Žalias V3.4 verdiktas reikalauja plataus, o ne kelių pavienių tiražų sukurto pagerėjimo.
+    </div>`;
+
+  status.textContent="Baigta: 100 walk-forward testų • 10×10 ir 5×20 nepersidengiantys blokai.";
   btn.disabled=false;
 }
 
