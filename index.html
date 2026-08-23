@@ -349,7 +349,32 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="v35Results" class="scroll" style="margin-top:12px"></div>
 </section>
 
-<footer>OMEGA AI v3.5 • Regime Detector Validation • Meta Walk-forward • LocalStorage</footer>
+
+<section class="card c12" id="v36FrozenCard">
+  <h2>OMEGA V3.6 — Frozen Gate Confirmation</h2>
+  <p>
+    V3.6 <b>nekeičia</b> OMEGA formulės ir nekeičia V3.5 režimo vartų.
+    Jis užšaldo V3.5 taisyklę ir tikrina, ar <b>STRONG ON</b> pranašumas išlieka:
+    pašalinus geriausius pavienius tiražus, skirtinguose chronologiniuose perioduose
+    ir prieš paprastus Frequency / Trend / Gap / Hybrid modelius.
+  </p>
+  <div class="notice">
+    <b>Frozen taisyklė:</b> prieš kiekvieną tikrinamą tiražą režimas nustatomas tik iš
+    ankstesnių 60 OMEGA-vs-Random walk-forward rezultatų. Ribos tokios pačios kaip V3.5.
+    Šio testo rezultatai vartų neperoptimizuoja.
+  </div>
+  <div class="toolbar" style="margin-top:14px">
+    <button class="btn green" id="runV36Btn" onclick="runV36FrozenConfirmation()">
+      Paleisti V3.6 Frozen Gate testą
+    </button>
+  </div>
+  <div id="v36Status" class="status">
+    Tikrinamas STRONG ON atsparumas, chronologinis stabilumas ir palyginimas su paprastais modeliais.
+  </div>
+  <div id="v36Results" class="scroll" style="margin-top:12px"></div>
+</section>
+
+<footer>OMEGA AI v3.6 • Frozen Gate Confirmation • Robustness Audit • LocalStorage</footer>
 </div>
 
 <script>
@@ -1890,6 +1915,213 @@ async function runV35RegimeValidation(){
     </div>`;
 
   status.textContent=`Baigta: ${tested.length} meta walk-forward testų po ${MIN_META} warm-up rezultatų.`;
+  btn.disabled=false;
+}
+
+async function runV36FrozenConfirmation(){
+  const btn=$("runV36Btn"), status=$("v36Status"), out=$("v36Results");
+  btn.disabled=true; out.innerHTML="";
+
+  const H=Math.min(360,draws.length-120);
+  const MIN_META=60, RECENT=30, PRIOR=30;
+  const simpleKinds=["frequency","trend","gap","hybrid"];
+
+  if(H < MIN_META+60){
+    status.textContent="Nepakanka istorijos V3.6 Frozen Gate testui.";
+    btn.disabled=false; return;
+  }
+
+  status.textContent=`Vyksta Frozen Gate auditas: ${H} walk-forward taškų…`;
+
+  function oneStats(history,actual,i,kind){
+    const s=blankValidation();
+    if(kind==="random"){
+      for(let r=0;r<20;r++) addValidation(s,randomTickets(i*7919+r*104729),actual,1/20);
+    }else{
+      addValidation(s,validationTickets(history,kind,i*1009+kind.length*7919),actual);
+    }
+    return s;
+  }
+
+  function metricsFromStat(s){
+    return {
+      main:s.totalMain/3,
+      three:s.bestDist[3],
+      prize:s.setsPrize
+    };
+  }
+
+  function aggregatePast(rs){
+    if(!rs.length) return {n:0,dm:0,d3:0,dp:0,score:0,pos:0};
+    let dm=0,d3=0,dp=0;
+    for(const x of rs){
+      dm += x.omega.main-x.random.main;
+      d3 += x.omega.three-x.random.three;
+      dp += x.omega.prize-x.random.prize;
+    }
+    dm/=rs.length;
+    d3=100*d3/rs.length;
+    dp=100*dp/rs.length;
+    const pos=(dm>0?1:0)+(d3>0?1:0)+(dp>0?1:0);
+    const score=(dm/0.05 + d3/2.0 + dp/3.0)/3;
+    return {n:rs.length,dm,d3,dp,score,pos};
+  }
+
+  // EXACT frozen V3.5 gate.
+  function frozenGate(past){
+    if(past.length < MIN_META) return {mode:"WARMUP",score:0,acceleration:0};
+    const recent=aggregatePast(past.slice(-RECENT));
+    const prior=aggregatePast(past.slice(-(RECENT+PRIOR),-RECENT));
+    const acceleration=recent.score-prior.score;
+    const on = recent.pos>=2 && recent.score>=0.35 && acceleration>=-0.20;
+    const strong = recent.pos===3 && recent.score>=0.75 && acceleration>=0;
+    return {mode:strong?"STRONG ON":on?"ON":"OFF",score:recent.score,acceleration,recent,prior};
+  }
+
+  const start=draws.length-H, rows=[];
+  for(let i=start;i<draws.length;i++){
+    const history=draws.slice(0,i), actual=draws[i];
+    const gate=frozenGate(rows);
+
+    const omega=metricsFromStat(oneStats(history,actual,i,"omega"));
+    const random=metricsFromStat(oneStats(history,actual,i,"random"));
+    const simple={};
+    for(const k of simpleKinds) simple[k]=metricsFromStat(oneStats(history,actual,i,k));
+
+    rows.push({date:actual.date,gate,omega,random,simple});
+    if((i-start)%3===0){
+      status.textContent=`Skaičiuojama ${i-start+1}/${H}…`;
+      await new Promise(r=>setTimeout(r,0));
+    }
+  }
+
+  const tested=rows.filter(x=>x.gate.mode!=="WARMUP");
+  const strong=tested.filter(x=>x.gate.mode==="STRONG ON");
+  const on=tested.filter(x=>x.gate.mode==="ON");
+  const off=tested.filter(x=>x.gate.mode==="OFF");
+
+  function perf(rs,ref="random"){
+    if(!rs.length) return {n:0,dm:0,d3:0,dp:0};
+    let dm=0,d3=0,dp=0;
+    for(const x of rs){
+      const r=ref==="random"?x.random:x.simple[ref];
+      dm += x.omega.main-r.main;
+      d3 += x.omega.three-r.three;
+      dp += x.omega.prize-r.prize;
+    }
+    return {n:rs.length,dm:dm/rs.length,d3:100*d3/rs.length,dp:100*dp/rs.length};
+  }
+
+  // Robustness: remove draws with largest positive OMEGA-vs-Random composite contribution.
+  function contribution(x){
+    const dm=(x.omega.main-x.random.main)/0.05;
+    const d3=100*(x.omega.three-x.random.three)/2.0;
+    const dp=100*(x.omega.prize-x.random.prize)/3.0;
+    return (dm+d3+dp)/3;
+  }
+  const strongSorted=[...strong].sort((a,b)=>contribution(b)-contribution(a));
+  const strongMinus5=strongSorted.slice(Math.min(5,strongSorted.length));
+  const strongMinus10=strongSorted.slice(Math.min(10,strongSorted.length));
+
+  const S=perf(strong), S5=perf(strongMinus5), S10=perf(strongMinus10);
+  const ON=perf(on), OFF=perf(off);
+
+  const simpleCompare={};
+  for(const k of simpleKinds) simpleCompare[k]=perf(strong,k);
+
+  // Chronological thirds of STRONG ON occurrences, not equal calendar periods.
+  function thirds(rs){
+    if(rs.length<9) return [];
+    const n=rs.length, cut1=Math.floor(n/3), cut2=Math.floor(2*n/3);
+    return [
+      rs.slice(0,cut1),
+      rs.slice(cut1,cut2),
+      rs.slice(cut2)
+    ].filter(x=>x.length);
+  }
+  const thirdsRows=thirds(strong).map((chunk,i)=>({
+    n:i+1,from:chunk[0].date,to:chunk[chunk.length-1].date,p:perf(chunk)
+  }));
+
+  const thirdsPositive=thirdsRows.filter(x=>x.p.dm>0 && ((x.p.d3>0?1:0)+(x.p.dp>0?1:0)>=1)).length;
+  const simpleWins=Object.entries(simpleCompare).filter(([k,p])=>p.dm>0 && ((p.d3>0?1:0)+(p.dp>0?1:0)>=1)).length;
+
+  // Strict confirmation criteria.
+  const enough=strong.length>=24;
+  const baseGood=S.dm>0.03 && ((S.d3>0?1:0)+(S.dp>0?1:0)>=1);
+  const robust5=S5.n>=15 && S5.dm>0.015;
+  const robust10=S10.n>=10 && S10.dm>0;
+  const chrono=thirdsRows.length===3 && thirdsPositive>=2;
+  const beatsSimple=simpleWins>=2;
+
+  let verdict, cls;
+  if(enough && baseGood && robust5 && robust10 && chrono && beatsSimple){
+    verdict="🟢 CONFIRMED — STRONG ON signalas išlaikė atsparumo, laiko ir paprastų modelių patikras.";
+    cls="go";
+  }else if(enough && baseGood && (robust5||chrono) && simpleWins>=1){
+    verdict="🟡 PARTIAL — STRONG ON turi signalą, bet bent viena svarbi atsparumo patikra dar nepakankama.";
+    cls="maybe";
+  }else{
+    verdict="🔴 NOT CONFIRMED — STRONG ON pranašumas neišlaikė užšaldyto V3.6 patvirtinimo.";
+    cls="nogo";
+  }
+
+  function fmt(x,d=3){return `${x>=0?"+":""}${x.toFixed(d)}`;}
+  function line(name,p){
+    if(!p.n) return `<b>${name}:</b> nėra testų.`;
+    return `<b>${name} (${p.n}):</b> Δ pagr. ${fmt(p.dm)} • Δ ≥3 ${fmt(p.d3,1)} p.p. • Δ prizinis ${fmt(p.dp,1)} p.p.`;
+  }
+
+  const simpleLines=Object.entries(simpleCompare).map(([k,p])=>
+    `<tr><td>${engineLabel(k)}</td><td>${p.n}</td><td>${fmt(p.dm)}</td><td>${fmt(p.d3,1)} p.p.</td><td>${fmt(p.dp,1)} p.p.</td></tr>`
+  ).join("");
+
+  const thirdsHtml=thirdsRows.length?thirdsRows.map(x=>
+    `<tr><td>${x.n}<br><small>${x.from} → ${x.to}</small></td><td>${x.p.n}</td><td>${fmt(x.p.dm)}</td><td>${fmt(x.p.d3,1)} p.p.</td><td>${fmt(x.p.dp,1)} p.p.</td></tr>`
+  ).join(""):`<tr><td colspan="5">Per mažai STRONG ON atvejų chronologiniams trečdaliams.</td></tr>`;
+
+  const currentGate=frozenGate(rows);
+
+  out.innerHTML=`
+    <div class="report ${cls}">
+      <b>V3.6 VERDIKTAS:</b> ${verdict}<br><br>
+      ${line("STRONG ON vs Random",S)}<br>
+      ${line("Pašalinus 5 geriausius STRONG ON tiražus",S5)}<br>
+      ${line("Pašalinus 10 geriausių STRONG ON tiražų",S10)}<br>
+      ${line("ON vs Random",ON)}<br>
+      ${line("OFF vs Random",OFF)}<br><br>
+
+      <b>Chronologiniai STRONG ON trečdaliai:</b> teigiamą signalą palaiko ${thirdsPositive}/${thirdsRows.length||0}.<br>
+      <b>STRONG ON prieš paprastus modelius:</b> patenkinamai lenkia ${simpleWins}/4.<br>
+      <b>Dabartinė frozen vartų būsena:</b> ${currentGate.mode} • score ${currentGate.score.toFixed(2)} • pagreitis ${fmt(currentGate.acceleration,2)}.
+    </div>
+
+    <h3 style="margin-top:22px">STRONG ON prieš paprastus modelius</h3>
+    <table>
+      <thead><tr><th>Kontrolė</th><th>n</th><th>Δ pagr.</th><th>Δ ≥3</th><th>Δ prizinis</th></tr></thead>
+      <tbody>${simpleLines}</tbody>
+    </table>
+
+    <h3 style="margin-top:22px">STRONG ON chronologiniai trečdaliai</h3>
+    <table>
+      <thead><tr><th>Periodas</th><th>n</th><th>Δ pagr.</th><th>Δ ≥3</th><th>Δ prizinis</th></tr></thead>
+      <tbody>${thirdsHtml}</tbody>
+    </table>
+
+    <div class="notice" style="margin-top:12px">
+      <b>Ką tikrina V3.6:</b> ar STRONG ON efektas išlieka ne tik todėl, kad keli pavieniai
+      tiražai buvo labai geri; ar jis pasirodo daugiau nei vienoje chronologinėje dalyje;
+      ir ar OMEGA tuo režimu lenkia bent dalį paprastų Frequency / Trend / Gap / Hybrid kontrolinių modelių.
+      V3.6 vartų ribų pagal šio testo rezultatą nekeičia.
+    </div>
+
+    <div class="notice" style="margin-top:12px">
+      <b>Galutinis metodologinis apribojimas:</b> net žalias V3.6 dar nėra nepriklausomas būsimos
+      ateities įrodymas, nes pati STRONG ON hipotezė buvo suformuota po ankstesnių auditų.
+      Patikimiausias kitas etapas po žalio ar stipraus geltono rezultato būtų užšaldytas LIVE forward testas.
+    </div>`;
+
+  status.textContent=`Baigta: ${tested.length} meta testų • STRONG ON ${strong.length} • ON ${on.length} • OFF ${off.length}.`;
   btn.disabled=false;
 }
 
