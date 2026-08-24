@@ -409,7 +409,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="liveFreezeResults" class="scroll" style="margin-top:14px"></div>
 </section>
 
-<footer>OMEGA 4.0 • Single Source of Truth • Eurojackpot • LIVE Forward Test • LocalStorage</footer>
+<footer>OMEGA 4.0.1 • Single Source of Truth • Eurojackpot • LIVE Forward Test • LocalStorage</footer>
 </div>
 
 <script>
@@ -2234,13 +2234,22 @@ function liveFreezeSnapshot(){
     state.innerHTML="<b>Tikrinama oficiali Deep prognozė ir kuriamas snapshotas…</b>";
     const db=lfLoad();
     if(!Array.isArray(db.snapshots)) db.snapshots=[];
-    const open=db.snapshots.find(x=>!x.actual);
-    if(open){
-      alert("Jau yra neužbaigta užšaldyta prognozė. Pirmiausia įvesk jos faktinį tiražą.");
-      liveFreezeRefresh(); return;
-    }
     const o=omega4LoadOfficial();
     if(!o.ok) throw new Error(o.reason);
+
+    // OMEGA 4.0 SSOT migracija: senas / kito generatoriaus neužbaigtas snapshotas
+    // negali blokuoti oficialaus Deep TOP 3. Jo netriname — paliekame audito istorijoje
+    // kaip SUPERSEDED, o aktyviu laikome tik identišką 4.0 SSOT snapshotą.
+    const legacyOpen=db.snapshots.filter(x=>!x.actual&&!x.supersededAt);
+    const sameOpen=legacyOpen.find(x=>x.omegaVersion==="4.0-SSOT"&&x.fingerprint===o.fingerprint);
+    if(sameOpen){
+      state.innerHTML="<b>Ši oficiali Deep TOP 3 prognozė jau užšaldyta.</b> Naujas dublikatas nekuriamas.";
+      liveFreezeRefresh(); return;
+    }
+    for(const old of legacyOpen){
+      old.supersededAt=new Date().toISOString();
+      old.supersededReason="Pakeista OMEGA 4.0 Single Source of Truth oficialiu Deep TOP 3 snapshotu.";
+    }
     const now=new Date();
     const snap={
       id:"OMEGA4-LF-"+now.toISOString(),
@@ -2278,7 +2287,7 @@ function lfHit(ticket,actual){
   return {m,e};
 }
 function liveFreezeSettle(){
-  const db=lfLoad(), open=[...db.snapshots].reverse().find(x=>!x.actual);
+  const db=lfLoad(), open=[...db.snapshots].reverse().find(x=>!x.actual&&!x.supersededAt);
   if(!open){alert("Pirmiausia užšaldyk prognozę.");return;}
   const date=$("lfDate").value, main=lfNums($("lfMain").value,50,5), euro=lfNums($("lfEuro").value,12,2);
   if(!date||main.length!==5||euro.length!==2){
@@ -2290,7 +2299,7 @@ function liveFreezeSettle(){
 }
 function liveFreezeRefresh(){
   const db=lfLoad(), state=$("liveFreezeState"), out=$("liveFreezeResults");
-  const open=[...db.snapshots].reverse().find(x=>!x.actual);
+  const open=[...db.snapshots].reverse().find(x=>!x.actual&&!x.supersededAt);
   const settled=db.snapshots.filter(x=>x.actual);
   state.innerHTML=open
     ? `<b>UŽŠALDYTA OMEGA 4.0 SSOT:</b> ${open.mode} • ${open.noBet?"NO BET / tik auditas":"SIGNAL ACTIVE"} • confidence ${((open.confidence||0)*100).toFixed(0)}% • duomenys iki ${open.dataThrough||"—"}.<br><small>Fingerprint: ${open.fingerprint||"senas snapshotas"}</small>`
@@ -2307,7 +2316,9 @@ function liveFreezeRefresh(){
     const pred=s.tickets.map((t,i)=>`${i+1}: ${t.main.join(" ")} + ${t.euro.join(" ")}`).join("<br>");
     const result=s.actual
       ? `${s.actual.date}: ${s.actual.main.join(" ")} + ${s.actual.euro.join(" ")}<br><small>${s.hits.map((h,i)=>`#${i+1} ${h.m}+${h.e}`).join(" • ")}</small>`
-      : "<b>LAUKIA TIRAŽO</b>";
+      : s.supersededAt
+        ? `<b style="color:#ffcf66">SUPERSEDED / ARCHYVAS</b><br><small>${s.supersededReason||"Pakeistas naujesniu oficialiu SSOT snapshotu."}</small>`
+        : "<b>LAUKIA TIRAŽO</b>";
     return `<tr><td>${s.frozenAt.slice(0,10)}<br><small>${s.mode} • ${s.score.toFixed(2)}</small></td><td>${pred}</td><td>${result}</td></tr>`;
   }).join("");
   out.innerHTML=`
