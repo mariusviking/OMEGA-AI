@@ -376,19 +376,23 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
 
 <section class="card c12" id="liveFreezeCard">
-  <h2>OMEGA LIVE FREEZE v1.1 — Eurojackpot Forward Test</h2>
+  <h2>OMEGA 4.0 — Single Source of Truth • Eurojackpot LIVE Forward Test</h2>
   <p>
-    Šis modulis nebeoptimizuoja istorijos. Jis užrakina dabartines V3.5/V3.6 vartų taisykles
-    ir nuo šio taško kaupia tik naujus, realiai po užšaldymo atsiradusius Eurojackpot tiražus.
+    OMEGA 4.0 turi vieną oficialią prognozės šaltinį: paskutinės <b>Deep analizės TOP 1–3</b>.
+    LIVE Freeze nieko papildomai negeneruoja — jis tiksliai nukopijuoja ir užrakina tuos pačius 3 bilietus,
+    jų indeksus, vartų būseną, analizės laiką ir duomenų ribą.
   </p>
 
   <div class="notice">
-    <b>FREEZE principas:</b> prognozė ir vartų būsena pirmiausia išsaugoma į LocalStorage.
-    Tik po to galima registruoti faktinį tiražą. Įrašyta prognozė neperrašoma pagal jau pamatytą rezultatą.
+    <b>Single Source of Truth:</b> viršuje matomas Deep TOP 3 ir LIVE užšaldomas TOP 3 privalo būti identiški.
+    Jei nėra naujos Deep analizės, paremtos paskutiniu žinomu tiražu, Freeze atsisako kurti snapshotą.
+    Jei vartai yra NEUTRAL, prognozę galima užšaldyti tik auditui, tačiau ji aiškiai žymima <b>NO BET</b>.
   </div>
 
+  <div id="omega4Official" class="report" style="margin-top:14px"></div>
+
   <div class="toolbar" style="margin-top:14px;gap:10px;flex-wrap:wrap">
-    <button class="btn green" onclick="liveFreezeSnapshot()">1. Užšaldyti kito tiražo prognozę</button>
+    <button class="btn green" onclick="liveFreezeSnapshot()">1. Užšaldyti OFICIALŲ Deep TOP 3</button>
     <button class="btn" onclick="liveFreezeRefresh()">Atnaujinti LIVE žurnalą</button>
   </div>
 
@@ -405,7 +409,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="liveFreezeResults" class="scroll" style="margin-top:14px"></div>
 </section>
 
-<footer>OMEGA LIVE FREEZE v1.1 • Eurojackpot • Frozen Forward Test • LocalStorage</footer>
+<footer>OMEGA 4.0 • Single Source of Truth • Eurojackpot • LIVE Forward Test • LocalStorage</footer>
 </div>
 
 <script>
@@ -1164,8 +1168,8 @@ async function analyze(){
  const scores=ranked.slice(0,200).map(x=>x.score),min=Math.min(...scores),max=Math.max(...scores);
  const res=chosen.map((x,i)=>({numbers:x.c,euro:chosenEuro[i].p,omega:Math.round((55+30*(x.score-min)/(max-min||1))*10)/10,details:details(x.c,st)}));
  res.portfolioMetrics=portfolio.metrics;
- localStorage.setItem(PRED_KEY,JSON.stringify({date:new Date().toISOString(),basedOn:st.lastDraw.date,results:res,modelSnapshot:modelSnapshot(draws),weights:adaptiveWeightsFromReputation(),form:Object.fromEntries(modelFormStats().map(x=>[x.k,x.form])),consensusTop:consensusScores(draws).slice(0,15).map(x=>x.n),anomalyTop:probabilityAnomalyStats(draws).slice(0,15).map(x=>x.n),memory:numberMemoryStats().filter(x=>x.failurePenalty>0||x.missedMemory>0).slice(0,20)}));
- renderResults(res);renderCoreNumbers(res);renderPortfolioMetrics(res);$("lastRun").textContent=new Date().toLocaleString("lt-LT",{dateStyle:"short",timeStyle:"short"});
+ localStorage.setItem(PRED_KEY,JSON.stringify({date:new Date().toISOString(),basedOn:st.lastDraw.date,analysisMode:mode,omegaVersion:"4.0-SSOT",gate:{mode:liveGate.mode,label:liveGate.label,confidence:liveGate.confidence||0,reason:liveGate.reason||"",weights:[...(liveGate.w||[])]},results:res,modelSnapshot:modelSnapshot(draws),weights:adaptiveWeightsFromReputation(),form:Object.fromEntries(modelFormStats().map(x=>[x.k,x.form])),consensusTop:consensusScores(draws).slice(0,15).map(x=>x.n),anomalyTop:probabilityAnomalyStats(draws).slice(0,15).map(x=>x.n),memory:numberMemoryStats().filter(x=>x.failurePenalty>0||x.missedMemory>0).slice(0,20)}));
+ renderResults(res);renderCoreNumbers(res);renderPortfolioMetrics(res);omega4OfficialRefresh();$("lastRun").textContent=new Date().toLocaleString("lt-LT",{dateStyle:"short",timeStyle:"short"});
  $("progressBar").style.width="100%";$("status").textContent=`Baigta: ${count.toLocaleString("lt-LT")} kandidatų, ${gens} genetinės kartos. Naudotas AI Ensemble, Consensus Engine, Consensus Guard, Failure Memory, Probability Anomaly Engine ir Adaptive Coverage Portfolio AI (11/12/13 aprėpties palyginimas).`;btn.disabled=false;
 }
 function details(c,st){
@@ -2199,23 +2203,35 @@ function lfFrozenGateFromHistory(){
   }
   return gate(rows);
 }
-function lfPrediction(){
-  const history=draws.slice();
-  // validationTickets() returns {numbers:[5], euro:[2]}.
-  // LIVE journal stores the five main numbers under `main`.
-  const tickets=validationTickets(history,"omega",draws.length*1009+"omega".length*7919);
-  if(!Array.isArray(tickets)||!tickets.length) throw new Error("OMEGA nesugeneravo bilietų.");
-  return tickets.map((t,i)=>{
-    if(!Array.isArray(t.numbers)||t.numbers.length!==5||!Array.isArray(t.euro)||t.euro.length!==2){
-      throw new Error(`Neteisingas OMEGA bilieto #${i+1} formatas.`);
-    }
-    return {main:[...t.numbers].sort((a,b)=>a-b),euro:[...t.euro].sort((a,b)=>a-b)};
+function omega4LoadOfficial(){
+  let p=null;
+  try{p=JSON.parse(localStorage.getItem(PRED_KEY)||"null")}catch(e){}
+  if(!p||!Array.isArray(p.results)||p.results.length!==3) return {ok:false,reason:"Nėra galiojančios Deep TOP 3 prognozės."};
+  const latest=draws.length?draws[draws.length-1].date:null;
+  if(p.basedOn!==latest) return {ok:false,reason:`Deep prognozė pasenusi: paremta ${p.basedOn||"—"}, o naujausi duomenys yra ${latest||"—"}.`};
+  if(p.analysisMode!=="deep") return {ok:false,reason:"Paskutinė prognozė nebuvo sukurta Deep režimu. Paleisk Deep analizę ir tik tada Freeze."};
+  const tickets=p.results.map((r,i)=>{
+    if(!Array.isArray(r.numbers)||r.numbers.length!==5||!Array.isArray(r.euro)||r.euro.length!==2) throw new Error(`Neteisingas Deep TOP ${i+1} bilieto formatas.`);
+    return {main:[...r.numbers].sort((a,b)=>a-b),euro:[...r.euro].sort((a,b)=>a-b),omega:Number(r.omega)||0,rank:i+1};
   });
+  const gate=p.gate||{mode:"unknown",label:"UNKNOWN",confidence:0,reason:"Seno formato Deep prognozė neturi vartų snapshot."};
+  const noBet=gate.mode==="neutral"||gate.label==="NEUTRAL";
+  const fingerprint=tickets.map(t=>`${t.main.join("-")}+${t.euro.join("-")}`).join("|");
+  return {ok:true,p,tickets,gate,noBet,fingerprint};
+}
+function omega4OfficialRefresh(){
+  const box=$("omega4Official"); if(!box)return;
+  let o;
+  try{o=omega4LoadOfficial()}catch(e){box.innerHTML=`<b style="color:#ff8080">OMEGA 4.0 klaida:</b> ${String(e.message||e)}`;return;}
+  if(!o.ok){box.innerHTML=`<b>OMEGA 4.0 oficiali prognozė:</b> nėra paruošta.<br><small>${o.reason}</small>`;return;}
+  const action=o.noBet?'<b style="color:#ffcf66">NO BET / tik auditas</b>':'<b style="color:#69e6b8">SIGNAL ACTIVE / LIVE testas</b>';
+  const rows=o.tickets.map(t=>`TOP ${t.rank}: <b>${t.main.join(" ")} + ${t.euro.join(" ")}</b> • indeksas ${t.omega.toFixed(1)}`).join('<br>');
+  box.innerHTML=`<b>OMEGA 4.0 OFICIALI PROGNOZĖ — Single Source of Truth</b><br>${action} • vartai ${o.gate.label||o.gate.mode} • confidence ${((o.gate.confidence||0)*100).toFixed(0)}%<br>${rows}<br><small>Duomenys iki ${o.p.basedOn}. Freeze privalo nukopijuoti būtent šiuos 3 bilietus, be jokio papildomo generatoriaus.</small>`;
 }
 function liveFreezeSnapshot(){
   const state=$("liveFreezeState");
   try{
-    state.innerHTML="<b>Kuriama ir užšaldoma prognozė…</b>";
+    state.innerHTML="<b>Tikrinama oficiali Deep prognozė ir kuriamas snapshotas…</b>";
     const db=lfLoad();
     if(!Array.isArray(db.snapshots)) db.snapshots=[];
     const open=db.snapshots.find(x=>!x.actual);
@@ -2223,27 +2239,37 @@ function liveFreezeSnapshot(){
       alert("Jau yra neužbaigta užšaldyta prognozė. Pirmiausia įvesk jos faktinį tiražą.");
       liveFreezeRefresh(); return;
     }
-    const g=lfFrozenGateFromHistory(), tickets=lfPrediction();
+    const o=omega4LoadOfficial();
+    if(!o.ok) throw new Error(o.reason);
     const now=new Date();
     const snap={
-      id:"LF-"+now.toISOString(),
+      id:"OMEGA4-LF-"+now.toISOString(),
+      omegaVersion:"4.0-SSOT",
       frozenAt:now.toISOString(),
-      dataThrough:draws.length?draws[draws.length-1].date:null,
-      mode:g.mode, score:g.score, acceleration:g.acceleration,
-      tickets, actual:null
+      sourcePredictionAt:o.p.date||null,
+      dataThrough:o.p.basedOn,
+      analysisMode:o.p.analysisMode,
+      mode:o.gate.label||o.gate.mode||"UNKNOWN",
+      gateMode:o.gate.mode||"unknown",
+      score:(o.gate.confidence||0),
+      confidence:(o.gate.confidence||0),
+      reason:o.gate.reason||"",
+      noBet:o.noBet,
+      fingerprint:o.fingerprint,
+      tickets:o.tickets.map(t=>({main:[...t.main],euro:[...t.euro],omega:t.omega,rank:t.rank})),
+      actual:null
     };
     db.snapshots.push(snap);
     lfSave(db);
-    // Verify that the snapshot really survived LocalStorage before claiming success.
     const check=lfLoad();
-    if(!Array.isArray(check.snapshots)||!check.snapshots.some(x=>x.id===snap.id)){
-      throw new Error("Prognozės nepavyko išsaugoti LocalStorage.");
-    }
+    const saved=Array.isArray(check.snapshots)?check.snapshots.find(x=>x.id===snap.id):null;
+    if(!saved) throw new Error("Prognozės nepavyko išsaugoti LocalStorage.");
+    if(saved.fingerprint!==o.fingerprint) throw new Error("SSOT patikra nepraėjo: užšaldyti bilietai nesutampa su Deep TOP 3.");
     liveFreezeRefresh();
   }catch(e){
-    console.error("LIVE FREEZE klaida",e);
-    state.innerHTML=`<b style="color:#ff8080">LIVE FREEZE KLAIDA:</b> ${String(e&&e.message?e.message:e)}. Prognozė neužšaldyta.`;
-    alert("LIVE FREEZE klaida: "+String(e&&e.message?e.message:e));
+    console.error("OMEGA 4.0 LIVE FREEZE klaida",e);
+    state.innerHTML=`<b style="color:#ff8080">OMEGA 4.0 FREEZE KLAIDA:</b> ${String(e&&e.message?e.message:e)}. Snapshotas nesukurtas.`;
+    alert("OMEGA 4.0 Freeze klaida: "+String(e&&e.message?e.message:e));
   }
 }
 function lfHit(ticket,actual){
@@ -2267,8 +2293,8 @@ function liveFreezeRefresh(){
   const open=[...db.snapshots].reverse().find(x=>!x.actual);
   const settled=db.snapshots.filter(x=>x.actual);
   state.innerHTML=open
-    ? `<b>UŽŠALDYTA:</b> ${open.mode} • score ${open.score.toFixed(2)} • pagreitis ${open.acceleration>=0?"+":""}${open.acceleration.toFixed(2)} • duomenys iki ${open.dataThrough||"—"}.`
-    : `<b>Nėra laukiančios prognozės.</b> Užšaldyk ją prieš kitą Eurojackpot tiražą.`;
+    ? `<b>UŽŠALDYTA OMEGA 4.0 SSOT:</b> ${open.mode} • ${open.noBet?"NO BET / tik auditas":"SIGNAL ACTIVE"} • confidence ${((open.confidence||0)*100).toFixed(0)}% • duomenys iki ${open.dataThrough||"—"}.<br><small>Fingerprint: ${open.fingerprint||"senas snapshotas"}</small>`
+    : `<b>Nėra laukiančios prognozės.</b> Pirmiausia paleisk naują Deep analizę, tada užšaldyk jos oficialų TOP 3 prieš kitą Eurojackpot tiražą.`;
 
   let best3=0, prizeLike=0, totalMain=0;
   for(const s of settled){
@@ -2293,11 +2319,11 @@ function liveFreezeRefresh(){
       <br><small>Šie skaičiai nėra perskaičiuojami atgal pakeitus būsimą formulę; kiekvienas snapshot saugo savo prognozę.</small>
     </div>
     <table style="margin-top:14px">
-      <thead><tr><th>Freeze</th><th>Užšaldyti OMEGA bilietai</th><th>Faktas / pataikymai</th></tr></thead>
+      <thead><tr><th>Freeze</th><th>Užšaldytas oficialus Deep TOP 3</th><th>Faktas / pataikymai</th></tr></thead>
       <tbody>${rows||'<tr><td colspan="3">LIVE žurnalas dar tuščias.</td></tr>'}</tbody>
     </table>`;
 }
-document.addEventListener("DOMContentLoaded",()=>{try{liveFreezeRefresh();}catch(e){}});
+document.addEventListener("DOMContentLoaded",()=>{try{omega4OfficialRefresh();liveFreezeRefresh();}catch(e){}});
 
 </script>
 </body>
