@@ -376,7 +376,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
 
 <section class="card c12" id="liveFreezeCard">
-  <h2>OMEGA LIVE FREEZE v1 — Eurojackpot Forward Test</h2>
+  <h2>OMEGA LIVE FREEZE v1.1 — Eurojackpot Forward Test</h2>
   <p>
     Šis modulis nebeoptimizuoja istorijos. Jis užrakina dabartines V3.5/V3.6 vartų taisykles
     ir nuo šio taško kaupia tik naujus, realiai po užšaldymo atsiradusius Eurojackpot tiražus.
@@ -405,7 +405,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="liveFreezeResults" class="scroll" style="margin-top:14px"></div>
 </section>
 
-<footer>OMEGA LIVE FREEZE v1 • Eurojackpot • Frozen Forward Test • LocalStorage</footer>
+<footer>OMEGA LIVE FREEZE v1.1 • Eurojackpot • Frozen Forward Test • LocalStorage</footer>
 </div>
 
 <script>
@@ -2156,7 +2156,7 @@ async function runV36FrozenConfirmation(){
   btn.disabled=false;
 }
 
-const LF_KEY="omega_live_freeze_v1";
+const LF_KEY="omega_live_freeze_v1"; // keep same key so existing LIVE history is preserved
 function lfLoad(){
   try{return JSON.parse(localStorage.getItem(LF_KEY)||'{"snapshots":[]}');}
   catch(e){return {snapshots:[]};}
@@ -2201,27 +2201,50 @@ function lfFrozenGateFromHistory(){
 }
 function lfPrediction(){
   const history=draws.slice();
-  // Freeze the same OMEGA ticket generator already used by the current build.
+  // validationTickets() returns {numbers:[5], euro:[2]}.
+  // LIVE journal stores the five main numbers under `main`.
   const tickets=validationTickets(history,"omega",draws.length*1009+"omega".length*7919);
-  return tickets.map(t=>({main:[...t.main].sort((a,b)=>a-b),euro:[...t.euro].sort((a,b)=>a-b)}));
+  if(!Array.isArray(tickets)||!tickets.length) throw new Error("OMEGA nesugeneravo bilietų.");
+  return tickets.map((t,i)=>{
+    if(!Array.isArray(t.numbers)||t.numbers.length!==5||!Array.isArray(t.euro)||t.euro.length!==2){
+      throw new Error(`Neteisingas OMEGA bilieto #${i+1} formatas.`);
+    }
+    return {main:[...t.numbers].sort((a,b)=>a-b),euro:[...t.euro].sort((a,b)=>a-b)};
+  });
 }
 function liveFreezeSnapshot(){
-  const db=lfLoad();
-  const open=db.snapshots.find(x=>!x.actual);
-  if(open){
-    alert("Jau yra neužbaigta užšaldyta prognozė. Pirmiausia įvesk jos faktinį tiražą.");
-    liveFreezeRefresh(); return;
+  const state=$("liveFreezeState");
+  try{
+    state.innerHTML="<b>Kuriama ir užšaldoma prognozė…</b>";
+    const db=lfLoad();
+    if(!Array.isArray(db.snapshots)) db.snapshots=[];
+    const open=db.snapshots.find(x=>!x.actual);
+    if(open){
+      alert("Jau yra neužbaigta užšaldyta prognozė. Pirmiausia įvesk jos faktinį tiražą.");
+      liveFreezeRefresh(); return;
+    }
+    const g=lfFrozenGateFromHistory(), tickets=lfPrediction();
+    const now=new Date();
+    const snap={
+      id:"LF-"+now.toISOString(),
+      frozenAt:now.toISOString(),
+      dataThrough:draws.length?draws[draws.length-1].date:null,
+      mode:g.mode, score:g.score, acceleration:g.acceleration,
+      tickets, actual:null
+    };
+    db.snapshots.push(snap);
+    lfSave(db);
+    // Verify that the snapshot really survived LocalStorage before claiming success.
+    const check=lfLoad();
+    if(!Array.isArray(check.snapshots)||!check.snapshots.some(x=>x.id===snap.id)){
+      throw new Error("Prognozės nepavyko išsaugoti LocalStorage.");
+    }
+    liveFreezeRefresh();
+  }catch(e){
+    console.error("LIVE FREEZE klaida",e);
+    state.innerHTML=`<b style="color:#ff8080">LIVE FREEZE KLAIDA:</b> ${String(e&&e.message?e.message:e)}. Prognozė neužšaldyta.`;
+    alert("LIVE FREEZE klaida: "+String(e&&e.message?e.message:e));
   }
-  const g=lfFrozenGateFromHistory(), tickets=lfPrediction();
-  const now=new Date();
-  const snap={
-    id:"LF-"+now.toISOString(),
-    frozenAt:now.toISOString(),
-    dataThrough:draws.length?draws[draws.length-1].date:null,
-    mode:g.mode, score:g.score, acceleration:g.acceleration,
-    tickets, actual:null
-  };
-  db.snapshots.push(snap); lfSave(db); liveFreezeRefresh();
 }
 function lfHit(ticket,actual){
   const m=ticket.main.filter(x=>actual.main.includes(x)).length;
