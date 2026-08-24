@@ -374,7 +374,38 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="v36Results" class="scroll" style="margin-top:12px"></div>
 </section>
 
-<footer>OMEGA AI v3.6 • Frozen Gate Confirmation • Robustness Audit • LocalStorage</footer>
+
+<section class="card c12" id="liveFreezeCard">
+  <h2>OMEGA LIVE FREEZE v1 — Eurojackpot Forward Test</h2>
+  <p>
+    Šis modulis nebeoptimizuoja istorijos. Jis užrakina dabartines V3.5/V3.6 vartų taisykles
+    ir nuo šio taško kaupia tik naujus, realiai po užšaldymo atsiradusius Eurojackpot tiražus.
+  </p>
+
+  <div class="notice">
+    <b>FREEZE principas:</b> prognozė ir vartų būsena pirmiausia išsaugoma į LocalStorage.
+    Tik po to galima registruoti faktinį tiražą. Įrašyta prognozė neperrašoma pagal jau pamatytą rezultatą.
+  </div>
+
+  <div class="toolbar" style="margin-top:14px;gap:10px;flex-wrap:wrap">
+    <button class="btn green" onclick="liveFreezeSnapshot()">1. Užšaldyti kito tiražo prognozę</button>
+    <button class="btn" onclick="liveFreezeRefresh()">Atnaujinti LIVE žurnalą</button>
+  </div>
+
+  <div id="liveFreezeState" class="status" style="margin-top:12px"></div>
+
+  <div class="notice" style="margin-top:14px">
+    <b>2. Po Eurojackpot tiražo įvesk faktą:</b><br>
+    Data <input id="lfDate" type="date" style="margin:6px;max-width:180px">
+    Pagrindiniai <input id="lfMain" placeholder="pvz. 3, 14, 22, 37, 48" style="margin:6px;min-width:260px">
+    Euro <input id="lfEuro" placeholder="pvz. 2, 9" style="margin:6px;min-width:150px">
+    <button class="btn green" onclick="liveFreezeSettle()">Užregistruoti rezultatą</button>
+  </div>
+
+  <div id="liveFreezeResults" class="scroll" style="margin-top:14px"></div>
+</section>
+
+<footer>OMEGA LIVE FREEZE v1 • Eurojackpot • Frozen Forward Test • LocalStorage</footer>
 </div>
 
 <script>
@@ -2124,6 +2155,126 @@ async function runV36FrozenConfirmation(){
   status.textContent=`Baigta: ${tested.length} meta testų • STRONG ON ${strong.length} • ON ${on.length} • OFF ${off.length}.`;
   btn.disabled=false;
 }
+
+const LF_KEY="omega_live_freeze_v1";
+function lfLoad(){
+  try{return JSON.parse(localStorage.getItem(LF_KEY)||'{"snapshots":[]}');}
+  catch(e){return {snapshots:[]};}
+}
+function lfSave(x){localStorage.setItem(LF_KEY,JSON.stringify(x));}
+function lfNums(s,max,n){
+  const a=(s||"").split(/[\s,;]+/).map(Number).filter(x=>Number.isInteger(x)&&x>=1&&x<=max);
+  return [...new Set(a)].slice(0,n).sort((a,b)=>a-b);
+}
+function lfFrozenGateFromHistory(){
+  // Reconstruct the exact V3.5/V3.6 frozen gate from historical walk-forward points.
+  const H=Math.min(360,draws.length-120), MIN_META=60, RECENT=30, PRIOR=30;
+  const start=draws.length-H, rows=[];
+  function oneStats(history,actual,i,kind){
+    const s=blankValidation();
+    if(kind==="random"){
+      for(let r=0;r<20;r++) addValidation(s,randomTickets(i*7919+r*104729),actual,1/20);
+    }else addValidation(s,validationTickets(history,kind,i*1009+kind.length*7919),actual);
+    return s;
+  }
+  function met(s){return {main:s.totalMain/3,three:s.bestDist[3],prize:s.setsPrize};}
+  function agg(rs){
+    if(!rs.length)return {n:0,dm:0,d3:0,dp:0,score:0,pos:0};
+    let dm=0,d3=0,dp=0;
+    for(const x of rs){dm+=x.omega.main-x.random.main;d3+=x.omega.three-x.random.three;dp+=x.omega.prize-x.random.prize;}
+    dm/=rs.length; d3=100*d3/rs.length; dp=100*dp/rs.length;
+    return {n:rs.length,dm,d3,dp,score:(dm/0.05+d3/2+dp/3)/3,pos:(dm>0)+(d3>0)+(dp>0)};
+  }
+  function gate(past){
+    if(past.length<MIN_META)return {mode:"WARMUP",score:0,acceleration:0};
+    const recent=agg(past.slice(-RECENT)), prior=agg(past.slice(-(RECENT+PRIOR),-RECENT));
+    const acceleration=recent.score-prior.score;
+    const on=recent.pos>=2&&recent.score>=0.35&&acceleration>=-0.20;
+    const strong=recent.pos===3&&recent.score>=0.75&&acceleration>=0;
+    return {mode:strong?"STRONG ON":on?"ON":"OFF",score:recent.score,acceleration};
+  }
+  for(let i=start;i<draws.length;i++){
+    const h=draws.slice(0,i), a=draws[i];
+    rows.push({omega:met(oneStats(h,a,i,"omega")),random:met(oneStats(h,a,i,"random"))});
+  }
+  return gate(rows);
+}
+function lfPrediction(){
+  const history=draws.slice();
+  // Freeze the same OMEGA ticket generator already used by the current build.
+  const tickets=validationTickets(history,"omega",draws.length*1009+"omega".length*7919);
+  return tickets.map(t=>({main:[...t.main].sort((a,b)=>a-b),euro:[...t.euro].sort((a,b)=>a-b)}));
+}
+function liveFreezeSnapshot(){
+  const db=lfLoad();
+  const open=db.snapshots.find(x=>!x.actual);
+  if(open){
+    alert("Jau yra neužbaigta užšaldyta prognozė. Pirmiausia įvesk jos faktinį tiražą.");
+    liveFreezeRefresh(); return;
+  }
+  const g=lfFrozenGateFromHistory(), tickets=lfPrediction();
+  const now=new Date();
+  const snap={
+    id:"LF-"+now.toISOString(),
+    frozenAt:now.toISOString(),
+    dataThrough:draws.length?draws[draws.length-1].date:null,
+    mode:g.mode, score:g.score, acceleration:g.acceleration,
+    tickets, actual:null
+  };
+  db.snapshots.push(snap); lfSave(db); liveFreezeRefresh();
+}
+function lfHit(ticket,actual){
+  const m=ticket.main.filter(x=>actual.main.includes(x)).length;
+  const e=ticket.euro.filter(x=>actual.euro.includes(x)).length;
+  return {m,e};
+}
+function liveFreezeSettle(){
+  const db=lfLoad(), open=[...db.snapshots].reverse().find(x=>!x.actual);
+  if(!open){alert("Pirmiausia užšaldyk prognozę.");return;}
+  const date=$("lfDate").value, main=lfNums($("lfMain").value,50,5), euro=lfNums($("lfEuro").value,12,2);
+  if(!date||main.length!==5||euro.length!==2){
+    alert("Reikia datos, 5 skirtingų pagrindinių skaičių (1–50) ir 2 Euro skaičių (1–12)."); return;
+  }
+  open.actual={date,main,euro,settledAt:new Date().toISOString()};
+  open.hits=open.tickets.map(t=>lfHit(t,open.actual));
+  lfSave(db); liveFreezeRefresh();
+}
+function liveFreezeRefresh(){
+  const db=lfLoad(), state=$("liveFreezeState"), out=$("liveFreezeResults");
+  const open=[...db.snapshots].reverse().find(x=>!x.actual);
+  const settled=db.snapshots.filter(x=>x.actual);
+  state.innerHTML=open
+    ? `<b>UŽŠALDYTA:</b> ${open.mode} • score ${open.score.toFixed(2)} • pagreitis ${open.acceleration>=0?"+":""}${open.acceleration.toFixed(2)} • duomenys iki ${open.dataThrough||"—"}.`
+    : `<b>Nėra laukiančios prognozės.</b> Užšaldyk ją prieš kitą Eurojackpot tiražą.`;
+
+  let best3=0, prizeLike=0, totalMain=0;
+  for(const s of settled){
+    const best=Math.max(...s.hits.map(h=>h.m));
+    if(best>=3)best3++;
+    if(s.hits.some(h=>h.m>=2&&h.e>=1))prizeLike++;
+    totalMain+=s.hits.reduce((a,h)=>a+h.m,0)/s.hits.length;
+  }
+  const rows=[...db.snapshots].reverse().map(s=>{
+    const pred=s.tickets.map((t,i)=>`${i+1}: ${t.main.join(" ")} + ${t.euro.join(" ")}`).join("<br>");
+    const result=s.actual
+      ? `${s.actual.date}: ${s.actual.main.join(" ")} + ${s.actual.euro.join(" ")}<br><small>${s.hits.map((h,i)=>`#${i+1} ${h.m}+${h.e}`).join(" • ")}</small>`
+      : "<b>LAUKIA TIRAŽO</b>";
+    return `<tr><td>${s.frozenAt.slice(0,10)}<br><small>${s.mode} • ${s.score.toFixed(2)}</small></td><td>${pred}</td><td>${result}</td></tr>`;
+  }).join("");
+  out.innerHTML=`
+    <div class="report">
+      <b>LIVE tik užbaigti tiražai: ${settled.length}</b><br>
+      Vid. pagrindinių pataikymų / bil.: ${settled.length?(totalMain/settled.length).toFixed(3):"—"} •
+      ≥3 pagrindinių bent viename biliete: ${settled.length?best3+"/"+settled.length:"—"} •
+      ≥2 pagr. + ≥1 Euro bent viename biliete: ${settled.length?prizeLike+"/"+settled.length:"—"}.
+      <br><small>Šie skaičiai nėra perskaičiuojami atgal pakeitus būsimą formulę; kiekvienas snapshot saugo savo prognozę.</small>
+    </div>
+    <table style="margin-top:14px">
+      <thead><tr><th>Freeze</th><th>Užšaldyti OMEGA bilietai</th><th>Faktas / pataikymai</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="3">LIVE žurnalas dar tuščias.</td></tr>'}</tbody>
+    </table>`;
+}
+document.addEventListener("DOMContentLoaded",()=>{try{liveFreezeRefresh();}catch(e){}});
 
 </script>
 </body>
