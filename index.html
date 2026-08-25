@@ -237,8 +237,8 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
  <h2>Pridėti naują tiražą</h2>
  <div class="form-grid">
   <div><label>Data</label><input id="dateInput" type="date"></div>
-  <div><label>5 pagrindiniai skaičiai</label><input id="numbersInput" placeholder="pvz. 4, 8, 17, 33, 45" inputmode="numeric"></div>
-  <div><label>2 Euro skaičiai</label><input id="euroInput" placeholder="pvz. 5, 9" inputmode="numeric"></div>
+  <div><label>5 pagrindiniai skaičiai</label><input id="numbersInput" placeholder="pvz. 4, 8, 17, 33, 45" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+  <div><label>2 Euro skaičiai</label><input id="euroInput" placeholder="pvz. 5, 9" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
  </div>
  <div class="toolbar" style="margin-top:11px">
   <button class="btn green" id="addBtn">Pridėti ir perskaičiuoti</button>
@@ -409,7 +409,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="liveFreezeResults" class="scroll" style="margin-top:14px"></div>
 </section>
 
-<footer>OMEGA 4.0.1 • Single Source of Truth • Eurojackpot • LIVE Forward Test • LocalStorage</footer>
+<footer>OMEGA 4.0.2 • Single Source of Truth • Eurojackpot • LIVE Forward Test • LocalStorage</footer>
 </div>
 
 <script>
@@ -1428,9 +1428,14 @@ $("backtestBtn").onclick=runBacktest;
 $("standardMode").onclick=()=>setMode("standard");$("deepMode").onclick=()=>setMode("deep");$("runBtn").onclick=analyze;
 $("addBtn").onclick=()=>{const date=$("dateInput").value,numbers=parseNums($("numbersInput").value,1,50,5),euro=parseNums($("euroInput").value,1,12,2);
  if(!date||!numbers||!euro){$("formMsg").textContent="Patikrink datą, 5 unikalius skaičius 1–50 ir 2 unikalius Euro skaičius 1–12.";return}
- const d={date,numbers,euro},i=draws.findIndex(x=>x.date===date);if(i>=0)draws[i]=d;else draws.push(d);
+ const d={date,numbers,euro},i=draws.findIndex(x=>x.date===date);
+ if(i>=0){
+   $("formMsg").textContent=`${date} tiražas jau yra bazėje. Dublikatas NEĮRAŠYTAS ir mokymosi ciklas NEPALEISTAS.`;
+   return;
+ }
+ draws.push(d);
  const cycle=learnFromDraw(d);saveDraws();render();
- $("formMsg").textContent=cycle?"Tiražas pridėtas, prognozė įvertinta ir modelių svoriai atnaujinti.":"Tiražas pridėtas ir statistika perskaičiuota."};
+ $("formMsg").textContent=cycle?"Tiražas pridėtas vieną kartą, prognozė įvertinta ir modelių svoriai atnaujinti.":"Tiražas pridėtas vieną kartą ir statistika perskaičiuota."};
 $("exportBtn").onclick=()=>{const blob=new Blob([JSON.stringify(draws,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="omega-eurojackpot-duomenys.json";a.click();URL.revokeObjectURL(a.href)};
 $("importBtn").onclick=()=>$("fileInput").click();$("fileInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());
  if(!Array.isArray(x)||!x.every(d=>d.date&&d.numbers?.length===5&&d.euro?.length===2))throw Error();draws=x;saveDraws();render();$("formMsg").textContent="JSON importuotas."}catch(err){$("formMsg").textContent="Netinkamas JSON formatas."}};
@@ -2292,6 +2297,11 @@ function liveFreezeSettle(){
   const date=$("lfDate").value, main=lfNums($("lfMain").value,50,5), euro=lfNums($("lfEuro").value,12,2);
   if(!date||main.length!==5||euro.length!==2){
     alert("Reikia datos, 5 skirtingų pagrindinių skaičių (1–50) ir 2 Euro skaičių (1–12)."); return;
+  }
+  const alreadySettled=db.snapshots.find(x=>x.actual&&x.actual.date===date);
+  if(alreadySettled){
+    alert(date+" tiražas LIVE žurnale jau užregistruotas. Dublikatas NEĮRAŠYTAS.");
+    liveFreezeRefresh(); return;
   }
   open.actual={date,main,euro,settledAt:new Date().toISOString()};
   open.hits=open.tickets.map(t=>lfHit(t,open.actual));
