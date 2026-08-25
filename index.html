@@ -384,7 +384,8 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   </p>
 
   <div class="notice">
-    <b>Single Source of Truth:</b> viršuje matomas Deep TOP 3 ir LIVE užšaldomas TOP 3 privalo būti identiški.
+    <b>Single Source of Truth:</b> viršuje matomas Deep TOP 3 ir LIVE užšaldomas TOP 3 privalo būti identiški.<br>
+    <b>OMEGA 4.0.4 eiga:</b> įvedus naują tiražą mygtukas „Pridėti ir perskaičiuoti“ automatiškai paleidžia naują Deep analizę. Freeze leidžiamas tik po to, kai oficiali Deep prognozė jau paremta naujausiu tiražu.<br>
     Jei nėra naujos Deep analizės, paremtos paskutiniu žinomu tiražu, Freeze atsisako kurti snapshotą.
     Jei vartai yra NEUTRAL, prognozę galima užšaldyti tik auditui, tačiau ji aiškiai žymima <b>NO BET</b>.
   </div>
@@ -409,7 +410,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="liveFreezeResults" class="scroll" style="margin-top:14px"></div>
 </section>
 
-<footer>OMEGA 4.0.2 • Single Source of Truth • Eurojackpot • LIVE Forward Test • LocalStorage</footer>
+<footer>OMEGA 4.0.4 • Single Source of Truth • Eurojackpot • LIVE Forward Test • Auto Deep • No Duplicates • LocalStorage</footer>
 </div>
 
 <script>
@@ -1426,16 +1427,28 @@ async function runBacktest(){
 }
 $("backtestBtn").onclick=runBacktest;
 $("standardMode").onclick=()=>setMode("standard");$("deepMode").onclick=()=>setMode("deep");$("runBtn").onclick=analyze;
-$("addBtn").onclick=()=>{const date=$("dateInput").value,numbers=parseNums($("numbersInput").value,1,50,5),euro=parseNums($("euroInput").value,1,12,2);
+$("addBtn").onclick=async()=>{const btn=$("addBtn"),date=$("dateInput").value,numbers=parseNums($("numbersInput").value,1,50,5),euro=parseNums($("euroInput").value,1,12,2);
  if(!date||!numbers||!euro){$("formMsg").textContent="Patikrink datą, 5 unikalius skaičius 1–50 ir 2 unikalius Euro skaičius 1–12.";return}
  const d={date,numbers,euro},i=draws.findIndex(x=>x.date===date);
  if(i>=0){
-   $("formMsg").textContent=`${date} tiražas jau yra bazėje. Dublikatas NEĮRAŠYTAS ir mokymosi ciklas NEPALEISTAS.`;
+   $("formMsg").textContent=`${date} tiražas jau yra bazėje. Dublikatas NEĮRAŠYTAS, LIVE istorija nedubliuojama ir Deep analizė antrą kartą nepaleidžiama.`;
    return;
  }
- draws.push(d);
- const cycle=learnFromDraw(d);saveDraws();render();
- $("formMsg").textContent=cycle?"Tiražas pridėtas vieną kartą, prognozė įvertinta ir modelių svoriai atnaujinti.":"Tiražas pridėtas vieną kartą ir statistika perskaičiuota."};
+ btn.disabled=true;
+ try{
+   draws.push(d);
+   const cycle=learnFromDraw(d);
+   saveDraws(); render();
+   $("formMsg").textContent=(cycle?"Tiražas pridėtas vieną kartą, ankstesnė prognozė įvertinta. ":"Tiražas pridėtas vieną kartą. ")+"Dabar automatiškai kuriamas naujas OFICIALUS Deep TOP 3 pagal "+date+" duomenis…";
+   setMode("deep");
+   await analyze();
+   omega4OfficialRefresh();
+   $("formMsg").textContent=`${date} užregistruotas VIENĄ kartą. Naujas OFICIALUS Deep TOP 3 perskaičiuotas pagal naujausius duomenis. Dabar galima spausti „Užšaldyti OFICIALŲ Deep TOP 3“.`;
+ }catch(e){
+   console.error(e);
+   $("formMsg").textContent="Tiražas įrašytas, bet automatinė Deep analizė nepavyko: "+String(e&&e.message?e.message:e)+". Paleisk Deep analizę rankiniu būdu prieš Freeze.";
+ }finally{btn.disabled=false;}
+};
 $("exportBtn").onclick=()=>{const blob=new Blob([JSON.stringify(draws,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="omega-eurojackpot-duomenys.json";a.click();URL.revokeObjectURL(a.href)};
 $("importBtn").onclick=()=>$("fileInput").click();$("fileInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());
  if(!Array.isArray(x)||!x.every(d=>d.date&&d.numbers?.length===5&&d.euro?.length===2))throw Error();draws=x;saveDraws();render();$("formMsg").textContent="JSON importuotas."}catch(err){$("formMsg").textContent="Netinkamas JSON formatas."}};
@@ -2166,11 +2179,40 @@ async function runV36FrozenConfirmation(){
 }
 
 const LF_KEY="omega_live_freeze_v1"; // keep same key so existing LIVE history is preserved
-function lfLoad(){
-  try{return JSON.parse(localStorage.getItem(LF_KEY)||'{"snapshots":[]}');}
-  catch(e){return {snapshots:[]};}
+function lfNormalizeDB(db){
+  if(!db||typeof db!=="object") db={snapshots:[]};
+  if(!Array.isArray(db.snapshots)) db.snapshots=[];
+  const seenActual=new Map(), seenOpen=new Map();
+  // Newest records win. Older duplicates remain visible only as archived audit records
+  // and are excluded from LIVE statistics.
+  for(let i=db.snapshots.length-1;i>=0;i--){
+    const s=db.snapshots[i]||{};
+    if(s.actual&&s.actual.date){
+      const key=String(s.actual.date);
+      if(seenActual.has(key)){
+        s.supersededAt=s.supersededAt||new Date().toISOString();
+        s.supersededReason=s.supersededReason||("Automatiškai archyvuotas dublikatas: "+key+" LIVE faktas jau egzistuoja.");
+        s.duplicateOf=seenActual.get(key);
+      }else seenActual.set(key,s.id||("row-"+i));
+    }else if(!s.supersededAt){
+      const key=(s.omegaVersion||"legacy")+"|"+(s.dataThrough||"")+"|"+(s.fingerprint||"");
+      if(seenOpen.has(key)){
+        s.supersededAt=new Date().toISOString();
+        s.supersededReason=s.supersededReason||"Automatiškai archyvuotas identiškas laukiančios prognozės dublikatas.";
+        s.duplicateOf=seenOpen.get(key);
+      }else seenOpen.set(key,s.id||("row-"+i));
+    }
+  }
+  return db;
 }
-function lfSave(x){localStorage.setItem(LF_KEY,JSON.stringify(x));}
+function lfLoad(){
+  try{
+    const db=lfNormalizeDB(JSON.parse(localStorage.getItem(LF_KEY)||'{"snapshots":[]}'));
+    localStorage.setItem(LF_KEY,JSON.stringify(db)); // one-time self-healing migration
+    return db;
+  }catch(e){return {snapshots:[]};}
+}
+function lfSave(x){localStorage.setItem(LF_KEY,JSON.stringify(lfNormalizeDB(x)));}
 function lfNums(s,max,n){
   const a=(s||"").split(/[\s,;]+/).map(Number).filter(x=>Number.isInteger(x)&&x>=1&&x<=max);
   return [...new Set(a)].slice(0,n).sort((a,b)=>a-b);
@@ -2298,9 +2340,9 @@ function liveFreezeSettle(){
   if(!date||main.length!==5||euro.length!==2){
     alert("Reikia datos, 5 skirtingų pagrindinių skaičių (1–50) ir 2 Euro skaičių (1–12)."); return;
   }
-  const alreadySettled=db.snapshots.find(x=>x.actual&&x.actual.date===date);
+  const alreadySettled=db.snapshots.find(x=>x.actual&&x.actual.date===date&&!x.supersededAt);
   if(alreadySettled){
-    alert(date+" tiražas LIVE žurnale jau užregistruotas. Dublikatas NEĮRAŠYTAS.");
+    alert(date+" tiražas LIVE žurnale jau užregistruotas. Dublikatas NEĮRAŠYTAS nei į statistiką, nei į istoriją.");
     liveFreezeRefresh(); return;
   }
   open.actual={date,main,euro,settledAt:new Date().toISOString()};
@@ -2310,7 +2352,7 @@ function liveFreezeSettle(){
 function liveFreezeRefresh(){
   const db=lfLoad(), state=$("liveFreezeState"), out=$("liveFreezeResults");
   const open=[...db.snapshots].reverse().find(x=>!x.actual&&!x.supersededAt);
-  const settled=db.snapshots.filter(x=>x.actual);
+  const settled=db.snapshots.filter(x=>x.actual&&!x.supersededAt);
   state.innerHTML=open
     ? `<b>UŽŠALDYTA OMEGA 4.0 SSOT:</b> ${open.mode} • ${open.noBet?"NO BET / tik auditas":"SIGNAL ACTIVE"} • confidence ${((open.confidence||0)*100).toFixed(0)}% • duomenys iki ${open.dataThrough||"—"}.<br><small>Fingerprint: ${open.fingerprint||"senas snapshotas"}</small>`
     : `<b>Nėra laukiančios prognozės.</b> Pirmiausia paleisk naują Deep analizę, tada užšaldyk jos oficialų TOP 3 prieš kitą Eurojackpot tiražą.`;
