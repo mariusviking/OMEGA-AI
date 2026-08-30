@@ -385,7 +385,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
   <div class="notice">
     <b>Single Source of Truth:</b> viršuje matomas Deep TOP 3 ir LIVE užšaldomas TOP 3 privalo būti identiški.<br>
-    <b>OMEGA 4.0.4 eiga:</b> įvedus naują tiražą mygtukas „Pridėti ir perskaičiuoti“ automatiškai paleidžia naują Deep analizę. Freeze leidžiamas tik po to, kai oficiali Deep prognozė jau paremta naujausiu tiražu.<br>
+    <b>OMEGA 4.0.5 eiga:</b> įvedus naują tiražą mygtukas „Pridėti ir perskaičiuoti“ automatiškai paleidžia naują Deep analizę. Freeze leidžiamas tik po to, kai oficiali Deep prognozė jau paremta naujausiu tiražu.<br>
     Jei nėra naujos Deep analizės, paremtos paskutiniu žinomu tiražu, Freeze atsisako kurti snapshotą.
     Jei vartai yra NEUTRAL, prognozę galima užšaldyti tik auditui, tačiau ji aiškiai žymima <b>NO BET</b>.
   </div>
@@ -410,7 +410,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="liveFreezeResults" class="scroll" style="margin-top:14px"></div>
 </section>
 
-<footer>OMEGA 4.0.4 • Single Source of Truth • Eurojackpot • LIVE Forward Test • Auto Deep • No Duplicates • LocalStorage</footer>
+<footer>OMEGA 4.0.5 • Single Source of Truth • Eurojackpot • LIVE Forward Test • Target Draw Guard • Auto Deep • No Duplicates</footer>
 </div>
 
 <script>
@@ -2179,31 +2179,23 @@ async function runV36FrozenConfirmation(){
 }
 
 const LF_KEY="omega_live_freeze_v1"; // keep same key so existing LIVE history is preserved
+function lfISODate(v){
+  if(!v)return ""; const z=String(v).slice(0,10); return /^\d{4}-\d{2}-\d{2}$/.test(z)?z:"";
+}
+function lfNextEurojackpotDate(afterDate){
+  const iso=lfISODate(afterDate); if(!iso)return ""; const d=new Date(iso+"T12:00:00");
+  for(let i=1;i<=7;i++){const n=new Date(d);n.setDate(d.getDate()+i);if(n.getDay()===2||n.getDay()===5)return lfISODate(n.toISOString());}
+  return "";
+}
+function lfTarget(s){return lfISODate(s&&s.targetDrawDate)||lfNextEurojackpotDate(s&&s.dataThrough);}
 function lfNormalizeDB(db){
-  if(!db||typeof db!=="object") db={snapshots:[]};
-  if(!Array.isArray(db.snapshots)) db.snapshots=[];
-  const seenActual=new Map(), seenOpen=new Map();
-  // Newest records win. Older duplicates remain visible only as archived audit records
-  // and are excluded from LIVE statistics.
-  for(let i=db.snapshots.length-1;i>=0;i--){
-    const s=db.snapshots[i]||{};
-    if(s.actual&&s.actual.date){
-      const key=String(s.actual.date);
-      if(seenActual.has(key)){
-        s.supersededAt=s.supersededAt||new Date().toISOString();
-        s.supersededReason=s.supersededReason||("Automatiškai archyvuotas dublikatas: "+key+" LIVE faktas jau egzistuoja.");
-        s.duplicateOf=seenActual.get(key);
-      }else seenActual.set(key,s.id||("row-"+i));
-    }else if(!s.supersededAt){
-      const key=(s.omegaVersion||"legacy")+"|"+(s.dataThrough||"")+"|"+(s.fingerprint||"");
-      if(seenOpen.has(key)){
-        s.supersededAt=new Date().toISOString();
-        s.supersededReason=s.supersededReason||"Automatiškai archyvuotas identiškas laukiančios prognozės dublikatas.";
-        s.duplicateOf=seenOpen.get(key);
-      }else seenOpen.set(key,s.id||("row-"+i));
-    }
-  }
-  return db;
+  if(!db||typeof db!=="object")db={snapshots:[]}; if(!Array.isArray(db.snapshots))db.snapshots=[];
+  db.snapshots.forEach(s=>{if(s&&!s.targetDrawDate)s.targetDrawDate=lfTarget(s);});
+  const seenActual=new Map(),seenPred=new Map();
+  for(let i=db.snapshots.length-1;i>=0;i--){const x=db.snapshots[i]||{};
+    if(x.actual&&x.actual.date){const k=lfISODate(x.actual.date)||x.actual.date;if(seenActual.has(k)){x.supersededAt=x.supersededAt||new Date().toISOString();x.supersededReason=x.supersededReason||("ARCHYVAS: "+k+" faktas jau užregistruotas vieną kartą.");}else seenActual.set(k,x.id||i);}
+    if(!x.supersededAt){const k=(lfTarget(x)||"")+"|"+(x.fingerprint||"");if(k!=="|"&&seenPred.has(k)){x.supersededAt=new Date().toISOString();x.supersededReason=x.supersededReason||("ARCHYVAS: identiška prognozė tam pačiam tiksliniam tiražui "+lfTarget(x)+".");}else if(k!=="|")seenPred.set(k,x.id||i);}
+  } return db;
 }
 function lfLoad(){
   try{
@@ -2283,6 +2275,9 @@ function liveFreezeSnapshot(){
     if(!Array.isArray(db.snapshots)) db.snapshots=[];
     const o=omega4LoadOfficial();
     if(!o.ok) throw new Error(o.reason);
+    const targetDrawDate=lfNextEurojackpotDate(o.p.basedOn);
+    if(!targetDrawDate) throw new Error("Nepavyko nustatyti kito Eurojackpot tiražo datos.");
+    if(draws.some(d=>lfISODate(d.date)===targetDrawDate)) throw new Error("Tikslinis tiražas "+targetDrawDate+" jau yra bazėje. Negalima kurti atgalinės LIVE prognozės.");
 
     // OMEGA 4.0 SSOT migracija: senas / kito generatoriaus neužbaigtas snapshotas
     // negali blokuoti oficialaus Deep TOP 3. Jo netriname — paliekame audito istorijoje
@@ -2304,6 +2299,7 @@ function liveFreezeSnapshot(){
       frozenAt:now.toISOString(),
       sourcePredictionAt:o.p.date||null,
       dataThrough:o.p.basedOn,
+      targetDrawDate,
       analysisMode:o.p.analysisMode,
       mode:o.gate.label||o.gate.mode||"UNKNOWN",
       gateMode:o.gate.mode||"unknown",
@@ -2336,10 +2332,10 @@ function lfHit(ticket,actual){
 function liveFreezeSettle(){
   const db=lfLoad(), open=[...db.snapshots].reverse().find(x=>!x.actual&&!x.supersededAt);
   if(!open){alert("Pirmiausia užšaldyk prognozę.");return;}
-  const date=$("lfDate").value, main=lfNums($("lfMain").value,50,5), euro=lfNums($("lfEuro").value,12,2);
-  if(!date||main.length!==5||euro.length!==2){
-    alert("Reikia datos, 5 skirtingų pagrindinių skaičių (1–50) ir 2 Euro skaičių (1–12)."); return;
-  }
+  const date=lfISODate($("lfDate").value), main=lfNums($("lfMain").value,50,5), euro=lfNums($("lfEuro").value,12,2);
+  if(!date||main.length!==5||euro.length!==2){alert("Reikia datos, 5 skirtingų pagrindinių skaičių (1–50) ir 2 Euro skaičių (1–12).");return;}
+  const target=lfTarget(open);
+  if(target&&date!==target){alert("Ši prognozė skirta "+target+" tiražui. "+date+" rezultatas prie jos nepririšamas.");return;}
   const alreadySettled=db.snapshots.find(x=>x.actual&&x.actual.date===date&&!x.supersededAt);
   if(alreadySettled){
     alert(date+" tiražas LIVE žurnale jau užregistruotas. Dublikatas NEĮRAŠYTAS nei į statistiką, nei į istoriją.");
@@ -2354,7 +2350,7 @@ function liveFreezeRefresh(){
   const open=[...db.snapshots].reverse().find(x=>!x.actual&&!x.supersededAt);
   const settled=db.snapshots.filter(x=>x.actual&&!x.supersededAt);
   state.innerHTML=open
-    ? `<b>UŽŠALDYTA OMEGA 4.0 SSOT:</b> ${open.mode} • ${open.noBet?"NO BET / tik auditas":"SIGNAL ACTIVE"} • confidence ${((open.confidence||0)*100).toFixed(0)}% • duomenys iki ${open.dataThrough||"—"}.<br><small>Fingerprint: ${open.fingerprint||"senas snapshotas"}</small>`
+    ? `<b>UŽŠALDYTA OMEGA 4.0 SSOT:</b> ${open.mode} • ${open.noBet?"NO BET / tik auditas":"SIGNAL ACTIVE"} • confidence ${((open.confidence||0)*100).toFixed(0)}%<br><b>Duomenys iki:</b> ${open.dataThrough||"—"} • <b>Freeze:</b> ${lfISODate(open.frozenAt)||"—"} • <b>Tikslinis tiražas:</b> ${lfTarget(open)||"—"}.<br><small>Fingerprint: ${open.fingerprint||"senas snapshotas"}</small>`
     : `<b>Nėra laukiančios prognozės.</b> Pirmiausia paleisk naują Deep analizę, tada užšaldyk jos oficialų TOP 3 prieš kitą Eurojackpot tiražą.`;
 
   let best3=0, prizeLike=0, totalMain=0;
@@ -2371,7 +2367,7 @@ function liveFreezeRefresh(){
       : s.supersededAt
         ? `<b style="color:#ffcf66">SUPERSEDED / ARCHYVAS</b><br><small>${s.supersededReason||"Pakeistas naujesniu oficialiu SSOT snapshotu."}</small>`
         : "<b>LAUKIA TIRAŽO</b>";
-    return `<tr><td>${s.frozenAt.slice(0,10)}<br><small>${s.mode} • ${s.score.toFixed(2)}</small></td><td>${pred}</td><td>${result}</td></tr>`;
+    return `<tr><td><b>${lfTarget(s)||"—"}</b><br><small>duomenys iki ${s.dataThrough||"—"}<br>freeze ${lfISODate(s.frozenAt)||"—"}<br>${s.mode||"—"} • ${Number(s.score||0).toFixed(2)}</small></td><td>${pred}</td><td>${result}</td></tr>`;
   }).join("");
   out.innerHTML=`
     <div class="report">
