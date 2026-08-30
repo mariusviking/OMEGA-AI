@@ -385,7 +385,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
   <div class="notice">
     <b>Single Source of Truth:</b> viršuje matomas Deep TOP 3 ir LIVE užšaldomas TOP 3 privalo būti identiški.<br>
-    <b>OMEGA 4.0.5 eiga:</b> įvedus naują tiražą mygtukas „Pridėti ir perskaičiuoti“ automatiškai paleidžia naują Deep analizę. Freeze leidžiamas tik po to, kai oficiali Deep prognozė jau paremta naujausiu tiražu.<br>
+    <b>OMEGA 4.0.6 eiga:</b> įvedus naują tiražą mygtukas „Pridėti ir perskaičiuoti“ automatiškai paleidžia naują Deep analizę. Freeze leidžiamas tik po to, kai oficiali Deep prognozė jau paremta naujausiu tiražu.<br>
     Jei nėra naujos Deep analizės, paremtos paskutiniu žinomu tiražu, Freeze atsisako kurti snapshotą.
     Jei vartai yra NEUTRAL, prognozę galima užšaldyti tik auditui, tačiau ji aiškiai žymima <b>NO BET</b>.
   </div>
@@ -410,7 +410,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="liveFreezeResults" class="scroll" style="margin-top:14px"></div>
 </section>
 
-<footer>OMEGA 4.0.5 • Single Source of Truth • Eurojackpot • LIVE Forward Test • Target Draw Guard • Auto Deep • No Duplicates</footer>
+<footer>OMEGA 4.0.6 • Single Source of Truth • Eurojackpot • LIVE Forward Test • Canonical Target Draw • Auto Deep • No Duplicates</footer>
 </div>
 
 <script>
@@ -2189,13 +2189,77 @@ function lfNextEurojackpotDate(afterDate){
 }
 function lfTarget(s){return lfISODate(s&&s.targetDrawDate)||lfNextEurojackpotDate(s&&s.dataThrough);}
 function lfNormalizeDB(db){
-  if(!db||typeof db!=="object")db={snapshots:[]}; if(!Array.isArray(db.snapshots))db.snapshots=[];
-  db.snapshots.forEach(s=>{if(s&&!s.targetDrawDate)s.targetDrawDate=lfTarget(s);});
-  const seenActual=new Map(),seenPred=new Map();
-  for(let i=db.snapshots.length-1;i>=0;i--){const x=db.snapshots[i]||{};
-    if(x.actual&&x.actual.date){const k=lfISODate(x.actual.date)||x.actual.date;if(seenActual.has(k)){x.supersededAt=x.supersededAt||new Date().toISOString();x.supersededReason=x.supersededReason||("ARCHYVAS: "+k+" faktas jau užregistruotas vieną kartą.");}else seenActual.set(k,x.id||i);}
-    if(!x.supersededAt){const k=(lfTarget(x)||"")+"|"+(x.fingerprint||"");if(k!=="|"&&seenPred.has(k)){x.supersededAt=new Date().toISOString();x.supersededReason=x.supersededReason||("ARCHYVAS: identiška prognozė tam pačiam tiksliniam tiražui "+lfTarget(x)+".");}else if(k!=="|")seenPred.set(k,x.id||i);}
-  } return db;
+  // OMEGA 4.0.6: vienas kanoninis LIVE įrašas vienam tiksliniam tiražui.
+  // Seni dublikatai fiziškai iškeliami iš aktyvaus snapshots masyvo į auditArchive.
+  if(!db||typeof db!=="object") db={snapshots:[],auditArchive:[]};
+  if(!Array.isArray(db.snapshots)) db.snapshots=[];
+  if(!Array.isArray(db.auditArchive)) db.auditArchive=[];
+
+  const now=new Date().toISOString();
+  const src=db.snapshots.filter(Boolean).map((s,i)=>{
+    const x={...s};
+    x.targetDrawDate=lfISODate(x.targetDrawDate)||lfTarget(x)||lfISODate(x.actual&&x.actual.date);
+    x.__order=i;
+    return x;
+  });
+
+  const groups=new Map();
+  const noTarget=[];
+  for(const x of src){
+    const k=x.targetDrawDate||lfISODate(x.actual&&x.actual.date);
+    if(!k){ noTarget.push(x); continue; }
+    if(!groups.has(k)) groups.set(k,[]);
+    groups.get(k).push(x);
+  }
+
+  const canonical=[];
+  const archived=[];
+  const quality=x=>{
+    let q=0;
+    if(x.actual&&lfISODate(x.actual.date)) q+=1000;       // užbaigtas visada laimi prieš laukiančią kopiją
+    if(!x.supersededAt) q+=200;                          // aktyvus laimi prieš seną archyvą
+    if(x.omegaVersion==="4.0-SSOT") q+=100;             // oficialus SSOT laimi prieš legacy
+    if(x.fingerprint) q+=20;
+    q+=(x.__order||0)/10000;                             // jei visa kita lygu – naujesnis
+    return q;
+  };
+
+  for(const [target,arr] of groups){
+    arr.sort((a,b)=>quality(b)-quality(a));
+    const keep=arr[0];
+
+    // Jei kanoninis įrašas neturi fakto, bet bet kuri tos pačios datos kopija jį turi,
+    // faktą ir pataikymus perkeliame į kanoninį įrašą.
+    const withActual=arr.find(x=>x.actual&&lfISODate(x.actual.date)===target);
+    if(withActual && !keep.actual){
+      keep.actual=withActual.actual;
+      keep.hits=withActual.hits || (Array.isArray(keep.tickets)?keep.tickets.map(t=>lfHit(t,withActual.actual)):[]);
+    }
+    keep.targetDrawDate=target;
+    delete keep.supersededAt;
+    delete keep.supersededReason;
+    delete keep.__order;
+    canonical.push(keep);
+
+    for(const x of arr.slice(1)){
+      delete x.__order;
+      archived.push({...x,archivedAt:x.archivedAt||now,archiveReason:`OMEGA 4.0.6 dedup: tikslinis tiražas ${target} turi vieną kanoninį LIVE įrašą.`});
+    }
+  }
+
+  for(const x of noTarget){ delete x.__order; canonical.push(x); }
+
+  // Archyve irgi nekaupiame identiškų migracijos kopijų.
+  const archiveSeen=new Set();
+  db.auditArchive=[...db.auditArchive,...archived].filter(x=>{
+    const k=[x.id||"",x.targetDrawDate||"",x.fingerprint||"",lfISODate(x.frozenAt)||"",lfISODate(x.actual&&x.actual.date)||""].join("|");
+    if(archiveSeen.has(k)) return false;
+    archiveSeen.add(k); return true;
+  });
+
+  db.snapshots=canonical.sort((a,b)=>String(a.targetDrawDate||"").localeCompare(String(b.targetDrawDate||"")));
+  db.schemaVersion="4.0.6";
+  return db;
 }
 function lfLoad(){
   try{
@@ -2282,12 +2346,12 @@ function liveFreezeSnapshot(){
     // OMEGA 4.0 SSOT migracija: senas / kito generatoriaus neužbaigtas snapshotas
     // negali blokuoti oficialaus Deep TOP 3. Jo netriname — paliekame audito istorijoje
     // kaip SUPERSEDED, o aktyviu laikome tik identišką 4.0 SSOT snapshotą.
-    const legacyOpen=db.snapshots.filter(x=>!x.actual&&!x.supersededAt);
-    const sameOpen=legacyOpen.find(x=>x.omegaVersion==="4.0-SSOT"&&x.fingerprint===o.fingerprint);
-    if(sameOpen){
-      state.innerHTML="<b>Ši oficiali Deep TOP 3 prognozė jau užšaldyta.</b> Naujas dublikatas nekuriamas.";
+    const sameTarget=db.snapshots.find(x=>lfTarget(x)===targetDrawDate);
+    if(sameTarget){
+      state.innerHTML=`<b>${targetDrawDate} prognozė jau egzistuoja.</b> OMEGA 4.0.6 neleidžia antro LIVE įrašo tam pačiam tiražui.`;
       liveFreezeRefresh(); return;
     }
+    const legacyOpen=db.snapshots.filter(x=>!x.actual&&!x.supersededAt);
     for(const old of legacyOpen){
       old.supersededAt=new Date().toISOString();
       old.supersededReason="Pakeista OMEGA 4.0 Single Source of Truth oficialiu Deep TOP 3 snapshotu.";
@@ -2378,7 +2442,7 @@ function liveFreezeRefresh(){
       <br><small>Šie skaičiai nėra perskaičiuojami atgal pakeitus būsimą formulę; kiekvienas snapshot saugo savo prognozę.</small>
     </div>
     <table style="margin-top:14px">
-      <thead><tr><th>Freeze</th><th>Užšaldytas oficialus Deep TOP 3</th><th>Faktas / pataikymai</th></tr></thead>
+      <thead><tr><th>Tikslinis tiražas</th><th>Užšaldytas oficialus Deep TOP 3</th><th>Faktas / pataikymai</th></tr></thead>
       <tbody>${rows||'<tr><td colspan="3">LIVE žurnalas dar tuščias.</td></tr>'}</tbody>
     </table>`;
 }
