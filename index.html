@@ -199,6 +199,22 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
  </div>
 </section>
 
+<section class="card c12" id="omega41LearningCard">
+ <h2>OMEGA 4.1 — Adaptive Learning</h2>
+ <p>Chronologinis online learner kiekvieną istorinį tiražą mato tik po to, kai prieš jį jau buvo apskaičiuotas signalas. Po fakto modelis atnaujina svorius ir pereina prie kito tiražo. Ateities informacija ankstesnei prognozei nenaudojama.</p>
+ <div class="stats">
+  <div class="stat"><span>Istorinių mokymo žingsnių</span><b id="o41Steps">—</b></div>
+  <div class="stat"><span>Validavimo langas</span><b id="o41ValN" style="font-size:18px">—</b></div>
+  <div class="stat"><span>Main learner svoris</span><b id="o41Alpha" style="font-size:18px">—</b></div>
+  <div class="stat"><span>Būsena</span><b id="o41Status" style="font-size:16px">—</b></div>
+ </div>
+ <div id="o41Metrics" class="report" style="margin-top:12px"></div>
+ <div class="toolbar" style="margin-top:12px">
+  <button class="btn" onclick="omega41Retrain(true)">Persimokyti iš visos istorijos</button>
+ </div>
+ <div class="notice" style="margin-top:12px"><b>Apsauga nuo overfitting:</b> išmoktas sluoksnis gauna įtaką galutiniam reitingui tik jei paskutinėje chronologinėje validavimo dalyje pagerina bent vieną kalibracijos / TOP-K kriterijų ir bendras validavimo balas yra teigiamas. Jei ne — jo svoris automatiškai tampa 0 %.</div>
+</section>
+
 <section class="card c6">
  <h2>Dinaminė modelių forma</h2>
  <div id="dynamicForm" class="scroll"></div>
@@ -376,16 +392,16 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
 
 <section class="card c12" id="liveFreezeCard">
-  <h2>OMEGA 4.0 — Single Source of Truth • Eurojackpot LIVE Forward Test</h2>
+  <h2>OMEGA 4.1 — Single Source of Truth • Eurojackpot LIVE Forward Test</h2>
   <p>
-    OMEGA 4.0 turi vieną oficialią prognozės šaltinį: paskutinės <b>Deep analizės TOP 1–3</b>.
+    OMEGA 4.1 turi vieną oficialų prognozės šaltinį: paskutinės <b>Deep analizės TOP 1–3</b>.
     LIVE Freeze nieko papildomai negeneruoja — jis tiksliai nukopijuoja ir užrakina tuos pačius 3 bilietus,
     jų indeksus, vartų būseną, analizės laiką ir duomenų ribą.
   </p>
 
   <div class="notice">
     <b>Single Source of Truth:</b> viršuje matomas Deep TOP 3 ir LIVE užšaldomas TOP 3 privalo būti identiški.<br>
-    <b>OMEGA 4.0.7 eiga:</b> įvedus naują tiražą mygtukas „Pridėti ir perskaičiuoti“ automatiškai paleidžia naują Deep analizę. Freeze leidžiamas tik po to, kai oficiali Deep prognozė jau paremta naujausiu tiražu.<br>
+    <b>OMEGA 4.1 eiga:</b> įvedus naują tiražą mygtukas „Pridėti ir perskaičiuoti“ automatiškai paleidžia naują Deep analizę. Freeze leidžiamas tik po to, kai oficiali Deep prognozė jau paremta naujausiu tiražu.<br>
     Jei nėra naujos Deep analizės, paremtos paskutiniu žinomu tiražu, Freeze atsisako kurti snapshotą.
     Jei vartai yra NEUTRAL, prognozę galima užšaldyti tik auditui, tačiau ji aiškiai žymima <b>NO BET</b>.
   </div>
@@ -410,7 +426,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="liveFreezeResults" class="scroll" style="margin-top:14px"></div>
 </section>
 
-<footer>OMEGA 4.0.7 • Single Source of Truth • Eurojackpot • LIVE Forward Test • Canonical Target Draw • Auto Deep • No Duplicates</footer>
+<footer>OMEGA 4.1 • Adaptive Learning • Single Source of Truth • Eurojackpot • Walk-Forward + LIVE</footer>
 </div>
 
 <script>
@@ -421,6 +437,7 @@ const PRED_KEY="omega_euro_prediction_v03";
 const LEARN_KEY="omega_self_learning_v20";
 const NUM_REP_KEY="omega_number_reputation_v20";
 const MODEL_REP_KEY="omega_model_reputation_v20";
+const O41_KEY="omega_adaptive_learning_v41";
 const BACKTEST_HORIZON_KEY="omega_backtest_horizons_v22";
 const FORM_HALF_LIFE=20;
 const NUMBER_HALF_LIFE=24;
@@ -1096,6 +1113,7 @@ Dabartinės formos lyderis: ${engineLabel(leader.k)} (${(leader.form*100).toFixe
 Senstantys favoritai: ${fading.join(", ")||"kol kas nenustatyta"}.
 Atnaujinti svoriai: Gap ${(w.gap*100).toFixed(0)} %, Trend ${(w.trend*100).toFixed(0)} %, Frequency ${(w.frequency*100).toFixed(0)} %, Hybrid ${(w.hybrid*100).toFixed(0)} %.`}
 function renderLearning(){
+ try{omega41Render(omega41EnsureLearner())}catch(e){console.error("OMEGA 4.1 render",e)}
  const log=getLearning(),model=getModelRep(),num=getNumberRep(),forms=modelFormStats(),aging=agingNumberStats();
  $("learningCycles").textContent=log.length;$("lastLearning").textContent=log.length?fmtDate(log.at(-1).actualDate):"—";$("autoCoach").textContent=autoCoachText(log.at(-1));
 
@@ -1117,6 +1135,116 @@ function renderLearning(){
  $("learningLog").innerHTML=log.length?`<table><thead><tr><th>Tiražas</th><th>Pataikyti pagr.</th><th>Nepastebėti</th><th>Formos lyderis</th></tr></thead><tbody>${[...log].reverse().slice(0,30).map(x=>`<tr><td>${fmtDate(x.actualDate)}</td><td>${x.hitMain.join(", ")||"—"}</td><td>${x.missed.join(", ")||"—"}</td><td>${engineLabel(x.bestModel)}</td></tr>`).join("")}</tbody></table>`:'<div class="status">Žurnalas tuščias.</div>';
 }
 
+
+// ===== OMEGA 4.1 Adaptive Learning ==========================================
+// Small online logistic ranking model. It is trained strictly chronologically:
+// features -> prediction -> actual draw revealed -> SGD update. No future leak.
+function o41sig(z){return 1/(1+Math.exp(-Math.max(-20,Math.min(20,z))))}
+function o41dot(w,x){let s=0;for(let i=0;i<w.length;i++)s+=w[i]*x[i];return s}
+function o41zero(n){return Array(n).fill(0)}
+function o41init(main=true){
+ const p=main?.10:(2/12),bias=Math.log(p/(1-p));
+ return [bias,0,0,0,0,0,0,0];
+}
+function o41State(maxN){
+ return {maxN,seen:0,lastSeen:Array(maxN+1).fill(-9999),prev:new Set(),wins:{10:Array(maxN+1).fill(0),20:Array(maxN+1).fill(0),30:Array(maxN+1).fill(0),100:Array(maxN+1).fill(0),250:Array(maxN+1).fill(0)}};
+}
+function o41Features(S,n,p){
+ const seen=Math.max(S.seen,1),g=S.lastSeen[n]<0?40:S.seen-S.lastSeen[n];
+ const r=(k)=>S.wins[k][n]/Math.max(1,Math.min(k,seen));
+ const r10=r(10),r20=r(20),r30=r(30),r100=r(100),r250=r(250);
+ const scale=p<.12?[.11,.075,.05,.032]:[.17,.115,.075,.05];
+ return [1,
+  Math.max(-2,Math.min(2,(r10-p)/scale[0])),
+  Math.max(-2,Math.min(2,(r30-p)/scale[1])),
+  Math.max(-2,Math.min(2,(r100-p)/scale[2])),
+  Math.max(-2,Math.min(2,(r250-p)/scale[3])),
+  Math.max(-1,Math.min(2,g/Math.max(6,1/p)-.8)),
+  Math.max(-2,Math.min(2,(r20-r100)/(scale[1]||.1))),
+  S.prev.has(n)?1:0];
+}
+function o41Advance(S,history,i,vals){
+ for(const k of [10,20,30,100,250]){
+  vals.forEach(n=>S.wins[k][n]++);
+  const old=i-k>=0?history[i-k]:null;
+  if(old){const arr=S.maxN===50?old.numbers:old.euro;arr.forEach(n=>S.wins[k][n]--)}
+ }
+ vals.forEach(n=>S.lastSeen[n]=i);S.prev=new Set(vals);S.seen++;
+}
+function o41SGD(w,x,y,lr,l2){
+ const pr=o41sig(o41dot(w,x)),err=y-pr;
+ for(let j=0;j<w.length;j++)w[j]+=lr*(err*x[j]-l2*(j?w[j]:0));
+ return pr;
+}
+function o41Top(probs,k){return probs.slice().sort((a,b)=>b.p-a.p).slice(0,k).map(x=>x.n)}
+function o41TrainOne(history,maxN,key,p,topK,lr){
+ let w=o41init(maxN===50),S=o41State(maxN),steps=0;
+ const valN=Math.min(180,Math.max(60,Math.floor(history.length*.20))),valStart=Math.max(120,history.length-valN);
+ let brier=0,baseBrier=0,valObs=0,topHits=0,expectedHits=0,logloss=0;
+ for(let i=0;i<history.length;i++){
+  const vals=history[i][key],actual=new Set(vals),probs=[];
+  for(let n=1;n<=maxN;n++){
+   const x=o41Features(S,n,p),pr=o41sig(o41dot(w,x));probs.push({n,p:pr,x});
+  }
+  if(i>=valStart){
+   const top=new Set(o41Top(probs,topK));topHits+=vals.filter(n=>top.has(n)).length;expectedHits+=vals.length*topK/maxN;
+   for(const q of probs){const y=actual.has(q.n)?1:0;brier+=(q.p-y)**2;baseBrier+=(p-y)**2;logloss+=-(y*Math.log(Math.max(q.p,1e-9))+(1-y)*Math.log(Math.max(1-q.p,1e-9)));valObs++}
+  }
+  // update only after result is revealed
+  const age=Math.max(0,history.length-i-1),ageFactor=.55+.45*Math.pow(.5,age/260);
+  for(const q of probs)o41SGD(w,q.x,actual.has(q.n)?1:0,lr*ageFactor,.0007);
+  o41Advance(S,history,i,vals);steps++;
+ }
+ const current=[];for(let n=1;n<=maxN;n++){const x=o41Features(S,n,p);current.push({n,p:o41sig(o41dot(w,x))})}
+ const learnerBrier=valObs?brier/valObs:0,uniformBrier=valObs?baseBrier/valObs:0;
+ const brierGain=uniformBrier?((uniformBrier-learnerBrier)/uniformBrier):0;
+ const recallGain=expectedHits?((topHits-expectedHits)/expectedHits):0;
+ return {w,current,steps,valN:Math.max(0,history.length-valStart),brier:learnerBrier,uniformBrier,brierGain,topHits,expectedHits,recallGain,logloss:valObs?logloss/valObs:0};
+}
+function omega41Train(history=draws){
+ const main=o41TrainOne(history,50,"numbers",.10,15,.010);
+ const euro=o41TrainOne(history,12,"euro",2/12,4,.014);
+ // Validation gate: no validated lift => no authority over production ranking.
+ const combined=.60*main.brierGain+.30*main.recallGain+.07*euro.brierGain+.03*euro.recallGain;
+ const evidence=(main.valN>=80 && (main.brierGain>0 || main.recallGain>.015) && combined>.004);
+ const alpha=evidence?Math.min(.28,Math.max(.06,.07+combined*.65)):0;
+ const euroAlpha=evidence?Math.min(.20,alpha*.75):0;
+ const model={version:"4.1",trainedThrough:history.at(-1)?.date||"",trainedAt:new Date().toISOString(),main,euro,combined,evidence,alpha,euroAlpha};
+ saveJSON(O41_KEY,model);return model;
+}
+function omega41EnsureLearner(){
+ let m=loadJSON(O41_KEY,null),last=draws.at(-1)?.date||"";
+ if(!m||m.version!=="4.1"||m.trainedThrough!==last)m=omega41Train(draws);
+ return m;
+}
+function omega41RankMap(arr){const s=arr.slice().sort((a,b)=>b.p-a.p),N=Math.max(1,s.length-1),m=new Map();s.forEach((x,i)=>m.set(x.n,1-i/N));return m}
+function omega41BlendMain(base,m){
+ if(!m||!m.alpha)return base;
+ const lm=omega41RankMap(m.main.current),a=m.alpha;
+ const b=base.map((x,i)=>({...x,score:(1-a)*x.score+a*(lm.get(x.n)||0)*2.15,learnerProb:m.main.current.find(q=>q.n===x.n)?.p||0}));
+ b.sort((x,y)=>y.score-x.score);return b;
+}
+function omega41BlendEuro(base,m){
+ if(!m||!m.euroAlpha)return base;
+ const lm=omega41RankMap(m.euro.current),a=m.euroAlpha;
+ const lo=Math.min(...base.map(x=>x.score)),hi=Math.max(...base.map(x=>x.score));
+ return base.map(x=>({...x,score:(1-a)*((x.score-lo)/(hi-lo||1))+a*(lm.get(x.n)||0)})).sort((x,y)=>y.score-x.score);
+}
+function omega41Render(m=omega41EnsureLearner()){
+ const s=id=>document.getElementById(id);if(!s("o41Status"))return;
+ s("o41Steps").textContent=m.main.steps;s("o41ValN").textContent=m.main.valN;
+ s("o41Alpha").textContent=(m.alpha*100).toFixed(1)+" %";
+ s("o41Status").textContent=m.evidence?"VALIDATED / aktyvus":"HOLD / svoris 0 %";
+ s("o41Metrics").innerHTML=`<b>Chronologinis validavimas:</b> main Brier ${m.main.brier.toFixed(4)} vs uniform ${m.main.uniformBrier.toFixed(4)} (${m.main.brierGain>=0?"+":""}${(m.main.brierGain*100).toFixed(2)} % pagerėjimas).<br>
+ <b>TOP15 istorinis recall:</b> ${m.main.topHits.toFixed(0)} pataikymų vs ${m.main.expectedHits.toFixed(1)} atsitiktinio lūkesčio (${m.main.recallGain>=0?"+":""}${(m.main.recallGain*100).toFixed(1)} %).<br>
+ <b>Euro TOP4:</b> ${m.euro.topHits.toFixed(0)} vs ${m.euro.expectedHits.toFixed(1)} (${m.euro.recallGain>=0?"+":""}${(m.euro.recallGain*100).toFixed(1)} %).<br>
+ <b>Galutinis 4.1 learner svoris:</b> main ${(m.alpha*100).toFixed(1)} %, Euro ${(m.euroAlpha*100).toFixed(1)} %. ${m.evidence?"Signalas praėjo validavimo vartus ir naudojamas tik kaip papildomas sluoksnis.":"Validavimo vartai neįveikti — modelis mokosi ir kaupia duomenis, bet prognozės reitingo nekeičia."}`;
+}
+function omega41Retrain(show=true){
+ const m=omega41Train(draws);omega41Render(m);if(show)alert(m.evidence?`OMEGA 4.1 persimokė iki ${m.trainedThrough}. Learner svoris ${(m.alpha*100).toFixed(1)}%.`:`OMEGA 4.1 persimokė iki ${m.trainedThrough}, bet validavimo pranašumas nepatvirtintas — learner svoris 0%.`);return m;
+}
+// ============================================================================
+
 function modelWeightsFromBacktest(){
  try{const x=JSON.parse(localStorage.getItem("omega_model_weights_v08")||"null");if(x)return x}catch(e){}
  return{frequency:.25,trend:.25,gap:.25,hybrid:.25};
@@ -1131,7 +1259,7 @@ function blendedScores(st){
 }
 async function analyze(){
  const btn=$("runBtn");btn.disabled=true;$("progressBar").style.width="3%";
- const st=computeStats(),active="ensemble",baseNs=blendedScores(st),liveGate=baseNs.gate||v32RegimeDecision(draws),consensus=consensusScores(draws);
+ const st=computeStats(),active="ensemble",baseRaw=blendedScores(st),liveGate=baseRaw.gate||v32RegimeDecision(draws),learner41=omega41EnsureLearner(),baseNs=omega41BlendMain(baseRaw,learner41),consensus=consensusScores(draws);
  const cMap=new Map(consensus.map(x=>[x.n,x.final]));
  const agingMap=new Map(agingNumberStats().map(x=>[x.n,x.agingScore]));
  const anomalyMap=new Map(probabilityAnomalyStats(draws).map(x=>[x.n,x.anomaly]));
@@ -1141,8 +1269,8 @@ async function analyze(){
   // Missed memory is gated by independent anomaly/consensus evidence so OMEGA does not simply chase the last draw.
   const gatedMiss=mem.missedMemory*clamp((Math.max(anom,0)+clamp(c/6,0,1))*.55,0,.65);
   return{...x,score:x.score+c*.20+a*.08+anom*.10+gatedMiss*.07-mem.failurePenalty*.22};
- }).sort((a,b)=>b.score-a.score),es=euroScores(st);
- $("activeEngine").textContent=`V3.2 ${liveGate.label}${liveGate.mode==="neutral"?" • signalas nepatvirtintas":` • confidence ${(liveGate.confidence*100).toFixed(0)}%`}`;renderNumberPanels(ns);
+ }).sort((a,b)=>b.score-a.score),es=omega41BlendEuro(euroScores(st),learner41);
+ $("activeEngine").textContent=`OMEGA 4.1 • ${liveGate.label}${liveGate.mode==="neutral"?" • signalas nepatvirtintas":` • confidence ${(liveGate.confidence*100).toFixed(0)}%`} • learner ${learner41.evidence?"ON "+(learner41.alpha*100).toFixed(0)+"%":"HOLD 0%"}`;renderNumberPanels(ns);omega41Render(learner41);
  if($("v32GateDiag")) $("v32GateDiag").innerHTML=`<b>V3.2 dabartinis Regime Gate:</b> ${liveGate.label} • ${liveGate.reason}<br><small>Naudojami svoriai: Frequency ${(liveGate.w[0]*100).toFixed(0)} %, Trend ${(liveGate.w[1]*100).toFixed(0)} %, Gap ${(liveGate.w[2]*100).toFixed(0)} %, Hybrid ${(liveGate.w[3]*100).toFixed(0)} %.</small>`;
  const map=new Map(ns.map(x=>[x.n,x.score])),emap=new Map(es.map(x=>[x.n,x.score]));
  const rng=seeded(Number(st.lastDraw.date.replaceAll("-",""))+st.N*97);
@@ -1169,9 +1297,9 @@ async function analyze(){
  const scores=ranked.slice(0,200).map(x=>x.score),min=Math.min(...scores),max=Math.max(...scores);
  const res=chosen.map((x,i)=>({numbers:x.c,euro:chosenEuro[i].p,omega:Math.round((55+30*(x.score-min)/(max-min||1))*10)/10,details:details(x.c,st)}));
  res.portfolioMetrics=portfolio.metrics;
- localStorage.setItem(PRED_KEY,JSON.stringify({date:new Date().toISOString(),basedOn:st.lastDraw.date,analysisMode:mode,omegaVersion:"4.0-SSOT",gate:{mode:liveGate.mode,label:liveGate.label,confidence:liveGate.confidence||0,reason:liveGate.reason||"",weights:[...(liveGate.w||[])]},results:res,modelSnapshot:modelSnapshot(draws),weights:adaptiveWeightsFromReputation(),form:Object.fromEntries(modelFormStats().map(x=>[x.k,x.form])),consensusTop:consensusScores(draws).slice(0,15).map(x=>x.n),anomalyTop:probabilityAnomalyStats(draws).slice(0,15).map(x=>x.n),memory:numberMemoryStats().filter(x=>x.failurePenalty>0||x.missedMemory>0).slice(0,20)}));
+ localStorage.setItem(PRED_KEY,JSON.stringify({date:new Date().toISOString(),basedOn:st.lastDraw.date,analysisMode:mode,omegaVersion:"4.1-Adaptive-Learning",learner:{trainedThrough:learner41.trainedThrough,evidence:learner41.evidence,alpha:learner41.alpha,euroAlpha:learner41.euroAlpha,combined:learner41.combined,mainBrierGain:learner41.main.brierGain,mainRecallGain:learner41.main.recallGain},gate:{mode:liveGate.mode,label:liveGate.label,confidence:liveGate.confidence||0,reason:liveGate.reason||"",weights:[...(liveGate.w||[])]},results:res,modelSnapshot:modelSnapshot(draws),weights:adaptiveWeightsFromReputation(),form:Object.fromEntries(modelFormStats().map(x=>[x.k,x.form])),consensusTop:consensusScores(draws).slice(0,15).map(x=>x.n),anomalyTop:probabilityAnomalyStats(draws).slice(0,15).map(x=>x.n),memory:numberMemoryStats().filter(x=>x.failurePenalty>0||x.missedMemory>0).slice(0,20)}));
  renderResults(res);renderCoreNumbers(res);renderPortfolioMetrics(res);omega4OfficialRefresh();$("lastRun").textContent=new Date().toLocaleString("lt-LT",{dateStyle:"short",timeStyle:"short"});
- $("progressBar").style.width="100%";$("status").textContent=`Baigta: ${count.toLocaleString("lt-LT")} kandidatų, ${gens} genetinės kartos. Naudotas AI Ensemble, Consensus Engine, Consensus Guard, Failure Memory, Probability Anomaly Engine ir Adaptive Coverage Portfolio AI (11/12/13 aprėpties palyginimas).`;btn.disabled=false;
+ $("progressBar").style.width="100%";$("status").textContent=`Baigta: ${count.toLocaleString("lt-LT")} kandidatų, ${gens} genetinės kartos. Naudotas OMEGA 4.1 chronologinis Adaptive Learner, AI Ensemble, Consensus Guard, Failure Memory, Probability Anomaly Engine ir Adaptive Coverage Portfolio AI. Learner įtaka taikoma tik praėjus validavimo vartus.`;btn.disabled=false;
 }
 function details(c,st){
  const m=new Map(consensusScores(draws).map(x=>[x.n,x])),am=new Map(probabilityAnomalyStats(draws).map(x=>[x.n,x])),mm=new Map(numberMemoryStats().map(x=>[x.n,x]));
@@ -1452,7 +1580,7 @@ $("addBtn").onclick=async()=>{const btn=$("addBtn"),date=$("dateInput").value,nu
 $("exportBtn").onclick=()=>{const blob=new Blob([JSON.stringify(draws,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="omega-eurojackpot-duomenys.json";a.click();URL.revokeObjectURL(a.href)};
 $("importBtn").onclick=()=>$("fileInput").click();$("fileInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());
  if(!Array.isArray(x)||!x.every(d=>d.date&&d.numbers?.length===5&&d.euro?.length===2))throw Error();draws=x;saveDraws();render();$("formMsg").textContent="JSON importuotas."}catch(err){$("formMsg").textContent="Netinkamas JSON formatas."}};
-$("resetBtn").onclick=()=>{if(confirm("Atkurti pradinę 977 tiražų bazę?")){draws=structuredClone(BASE_DRAWS);saveDraws();localStorage.removeItem(PRED_KEY);localStorage.removeItem(ENGINE_KEY);localStorage.removeItem(LEARN_KEY);localStorage.removeItem(NUM_REP_KEY);localStorage.removeItem(MODEL_REP_KEY);localStorage.removeItem(BACKTEST_HORIZON_KEY);render();$("formMsg").textContent="Pradinė bazė atkurta."}};
+$("resetBtn").onclick=()=>{if(confirm("Atkurti pradinę 977 tiražų bazę?")){draws=structuredClone(BASE_DRAWS);saveDraws();localStorage.removeItem(PRED_KEY);localStorage.removeItem(ENGINE_KEY);localStorage.removeItem(LEARN_KEY);localStorage.removeItem(NUM_REP_KEY);localStorage.removeItem(MODEL_REP_KEY);localStorage.removeItem(BACKTEST_HORIZON_KEY);localStorage.removeItem(O41_KEY);render();$("formMsg").textContent="Pradinė bazė atkurta."}};
 $("dateInput").value=new Date().toISOString().slice(0,10);render();
 
 
@@ -2329,7 +2457,7 @@ function omega4OfficialRefresh(){
   if(!o.ok){box.innerHTML=`<b>OMEGA 4.0 oficiali prognozė:</b> nėra paruošta.<br><small>${o.reason}</small>`;return;}
   const action=o.noBet?'<b style="color:#ffcf66">NO BET / tik auditas</b>':'<b style="color:#69e6b8">SIGNAL ACTIVE / LIVE testas</b>';
   const rows=o.tickets.map(t=>`TOP ${t.rank}: <b>${t.main.join(" ")} + ${t.euro.join(" ")}</b> • indeksas ${t.omega.toFixed(1)}`).join('<br>');
-  box.innerHTML=`<b>OMEGA 4.0 OFICIALI PROGNOZĖ — Single Source of Truth</b><br>${action} • vartai ${o.gate.label||o.gate.mode} • confidence ${((o.gate.confidence||0)*100).toFixed(0)}%<br>${rows}<br><small>Duomenys iki ${o.p.basedOn}. Freeze privalo nukopijuoti būtent šiuos 3 bilietus, be jokio papildomo generatoriaus.</small>`;
+  box.innerHTML=`<b>OMEGA 4.1 OFICIALI PROGNOZĖ — Single Source of Truth</b><br>${action} • vartai ${o.gate.label||o.gate.mode} • confidence ${((o.gate.confidence||0)*100).toFixed(0)}%<br>${rows}<br><small>Duomenys iki ${o.p.basedOn}. Freeze privalo nukopijuoti būtent šiuos 3 bilietus, be jokio papildomo generatoriaus.</small>`;
 }
 function liveFreezeSnapshot(){
   const state=$("liveFreezeState");
@@ -2491,7 +2619,7 @@ function liveFreezeRefresh(){
 document.addEventListener("DOMContentLoaded",()=>{try{
   const migrated=omega407SyncSettledLiveFacts();
   if(migrated) render();
-  omega4OfficialRefresh(); liveFreezeRefresh();
+  omega4OfficialRefresh(); liveFreezeRefresh(); try{omega41Render(omega41EnsureLearner())}catch(e){console.error("OMEGA 4.1 init learner",e)}
   // 4.0.7 migracija: jei senas LIVE faktas buvo tik žurnale (pvz. 2026-08-28),
   // jis įkeliamas į pagrindinę bazę. Jei oficiali prognozė nuo jo atsilieka, Auto Deep atnaujina ją.
   if(migrated){
