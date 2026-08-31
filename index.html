@@ -385,7 +385,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
   <div class="notice">
     <b>Single Source of Truth:</b> viršuje matomas Deep TOP 3 ir LIVE užšaldomas TOP 3 privalo būti identiški.<br>
-    <b>OMEGA 4.0.6 eiga:</b> įvedus naują tiražą mygtukas „Pridėti ir perskaičiuoti“ automatiškai paleidžia naują Deep analizę. Freeze leidžiamas tik po to, kai oficiali Deep prognozė jau paremta naujausiu tiražu.<br>
+    <b>OMEGA 4.0.7 eiga:</b> įvedus naują tiražą mygtukas „Pridėti ir perskaičiuoti“ automatiškai paleidžia naują Deep analizę. Freeze leidžiamas tik po to, kai oficiali Deep prognozė jau paremta naujausiu tiražu.<br>
     Jei nėra naujos Deep analizės, paremtos paskutiniu žinomu tiražu, Freeze atsisako kurti snapshotą.
     Jei vartai yra NEUTRAL, prognozę galima užšaldyti tik auditui, tačiau ji aiškiai žymima <b>NO BET</b>.
   </div>
@@ -410,7 +410,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="liveFreezeResults" class="scroll" style="margin-top:14px"></div>
 </section>
 
-<footer>OMEGA 4.0.6 • Single Source of Truth • Eurojackpot • LIVE Forward Test • Canonical Target Draw • Auto Deep • No Duplicates</footer>
+<footer>OMEGA 4.0.7 • Single Source of Truth • Eurojackpot • LIVE Forward Test • Canonical Target Draw • Auto Deep • No Duplicates</footer>
 </div>
 
 <script>
@@ -2393,7 +2393,33 @@ function lfHit(ticket,actual){
   const e=ticket.euro.filter(x=>actual.euro.includes(x)).length;
   return {m,e};
 }
-function liveFreezeSettle(){
+function omega407UpsertMainDraw(date,main,euro){
+  const numbers=[...main].sort((a,b)=>a-b), eu=[...euro].sort((a,b)=>a-b);
+  const i=draws.findIndex(d=>d.date===date);
+  if(i>=0){
+    // Tas pats tiražas pagrindinėje bazėje gali būti tik vieną kartą.
+    draws[i]={date,numbers,euro:eu};
+    draws.sort((a,b)=>a.date.localeCompare(b.date));
+    saveDraws();
+    return false;
+  }
+  draws.push({date,numbers,euro:eu});
+  draws.sort((a,b)=>a.date.localeCompare(b.date));
+  saveDraws();
+  return true;
+}
+function omega407SyncSettledLiveFacts(){
+  const db=lfLoad(); let changed=false;
+  for(const s of db.snapshots||[]){
+    if(!s.actual||s.supersededAt) continue;
+    const a=s.actual;
+    if(!a.date||!Array.isArray(a.main)||a.main.length!==5||!Array.isArray(a.euro)||a.euro.length!==2) continue;
+    const i=draws.findIndex(d=>d.date===a.date);
+    if(i<0){ omega407UpsertMainDraw(a.date,a.main,a.euro); changed=true; }
+  }
+  return changed;
+}
+async function liveFreezeSettle(){
   const db=lfLoad(), open=[...db.snapshots].reverse().find(x=>!x.actual&&!x.supersededAt);
   if(!open){alert("Pirmiausia užšaldyk prognozę.");return;}
   const date=lfISODate($("lfDate").value), main=lfNums($("lfMain").value,50,5), euro=lfNums($("lfEuro").value,12,2);
@@ -2402,12 +2428,28 @@ function liveFreezeSettle(){
   if(target&&date!==target){alert("Ši prognozė skirta "+target+" tiražui. "+date+" rezultatas prie jos nepririšamas.");return;}
   const alreadySettled=db.snapshots.find(x=>x.actual&&x.actual.date===date&&!x.supersededAt);
   if(alreadySettled){
-    alert(date+" tiražas LIVE žurnale jau užregistruotas. Dublikatas NEĮRAŠYTAS nei į statistiką, nei į istoriją.");
-    liveFreezeRefresh(); return;
+    // Net jei LIVE faktas jau buvo, 4.0.7 užtikrina, kad jis yra ir pagrindinėje istorijoje.
+    omega407UpsertMainDraw(date,alreadySettled.actual.main,alreadySettled.actual.euro);
+    render(); liveFreezeRefresh(); omega4OfficialRefresh();
+    alert(date+" tiražas jau buvo LIVE žurnale. Pagrindinė istorija sinchronizuota; dublikatas nesukurtas.");
+    return;
   }
   open.actual={date,main,euro,settledAt:new Date().toISOString()};
   open.hits=open.tickets.map(t=>lfHit(t,open.actual));
-  lfSave(db); liveFreezeRefresh();
+  lfSave(db);
+  const wasNew=omega407UpsertMainDraw(date,main,euro);
+  if(wasNew) learnFromDraw({date,numbers:[...main].sort((a,b)=>a-b),euro:[...euro].sort((a,b)=>a-b)});
+  render(); liveFreezeRefresh();
+  // Vienas paspaudimas = LIVE faktas + pagrindinė istorija + nauja oficiali Deep prognozė.
+  try{
+    setMode("deep");
+    await analyze();
+    omega4OfficialRefresh();
+  }catch(e){
+    console.error("OMEGA 4.0.7 Auto Deep",e);
+    omega4OfficialRefresh();
+    alert(date+" įrašytas į LIVE ir pagrindinę istoriją, tačiau Auto Deep nepavyko. Paleisk Deep analizę rankiniu būdu.");
+  }
 }
 function liveFreezeRefresh(){
   const db=lfLoad(), state=$("liveFreezeState"), out=$("liveFreezeResults");
@@ -2446,7 +2488,17 @@ function liveFreezeRefresh(){
       <tbody>${rows||'<tr><td colspan="3">LIVE žurnalas dar tuščias.</td></tr>'}</tbody>
     </table>`;
 }
-document.addEventListener("DOMContentLoaded",()=>{try{omega4OfficialRefresh();liveFreezeRefresh();}catch(e){}});
+document.addEventListener("DOMContentLoaded",()=>{try{
+  const migrated=omega407SyncSettledLiveFacts();
+  if(migrated) render();
+  omega4OfficialRefresh(); liveFreezeRefresh();
+  // 4.0.7 migracija: jei senas LIVE faktas buvo tik žurnale (pvz. 2026-08-28),
+  // jis įkeliamas į pagrindinę bazę. Jei oficiali prognozė nuo jo atsilieka, Auto Deep atnaujina ją.
+  if(migrated){
+    const p=loadJSON(PRED_KEY,null), latest=draws[draws.length-1]?.date;
+    if(latest && (!p||p.basedOn<latest)) setTimeout(async()=>{try{setMode("deep");await analyze();omega4OfficialRefresh();}catch(e){console.error("OMEGA 4.0.7 migration Auto Deep",e);}},80);
+  }
+}catch(e){console.error("OMEGA 4.0.7 init",e);}});
 
 </script>
 </body>
