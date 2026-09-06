@@ -315,7 +315,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 <section class="card c12" id="signalAuditCard"><h2>OMEGA Research 1.0 — Signal Audit</h2><p>Šis modulis <b>negeneruoja bilietų</b>. Jis chronologiškai tikrina, ar paprasti signalai kitame tiraže veikia geriau už vienodą atsitiktinį pasirinkimą.</p><div class="notice"><b>GO / NO-GO:</b> teigiamas rezultatas turi išlikti visame walk-forward teste, holdout periode ir bent 2 iš 3 chronologinių segmentų.</div><div class="toolbar" style="margin-top:14px"><button class="btn green" id="runSignalAuditBtn" onclick="runOmegaSignalAudit()">Paleisti Signal Audit</button></div><div id="signalAuditStatus" class="status">Dar nepaleista.</div><div id="signalAuditSummary" class="report" style="margin-top:14px"></div><div id="signalAuditResults" class="scroll" style="margin-top:14px"></div></section>
 
 <section class="card c12" id="sequenceLabCard">
-<h2>OMEGA Sequence Lab 1.3 — Next-Draw Pattern Engine</h2>
+<h2>OMEGA Sequence Lab 1.4 — Next-Draw Pattern Engine</h2>
 <p>Analizuoja tik vienodo formato erą nuo <b>2022-03-25</b> (5 iš 50 + 2 iš 12). Vietoje „karštų skaičių“ ieško istorinių būsenų, panašių į dabartinę, ir tikrina, kas iškrito <b>kitame</b> tiraže.</p>
 <div class="notice"><b>Anti-leakage:</b> walk-forward teste kiekvienas prognozuojamas tiražas mato tik ankstesnius tiražus. Rezultatas lyginamas su neutralia baze: MAIN 10% vienam skaičiui, EURO 16.67% vienam skaičiui.</div>
 <div class="toolbar" style="margin-top:14px"><button class="btn green" id="seqRunBtn" onclick="seqRun()">Paleisti Sequence Lab</button></div>
@@ -379,6 +379,30 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="seq13Latest" class="scroll" style="margin-top:14px"></div>
   <div id="seq13Transitions" class="scroll" style="margin-top:14px"></div>
   <div id="seq13Final" class="report" style="margin-top:14px"></div>
+</section>
+
+
+<section class="card c12" id="seq14ReplayCard">
+  <h2>OMEGA Sequence Lab 1.4 — Historical Regime Replay</h2>
+  <p>
+    Šis etapas atsako į konkretų klausimą: <b>kai istorijoje atsirasdavo būsena,
+    panaši į dabartinę 6/6 teigiamų langų būseną, kas nutikdavo po jos?</b>
+    Frozen Consensus taisyklė nekeičiamа.
+  </p>
+  <div class="notice">
+    <b>Primary trigger:</b> tuo istoriniu momentu visi 6 iš anksto nustatyti langai
+    (24, 36, 48, 60, 72, 96 tiražai) turi teigiamą edge prieš random 0.333.
+    Programa kiekvieną tašką vertina tik iš tuo metu jau žinomos praeities.
+    Po triggerio tikrinami sekantys 12, 24 ir 36 tiražai.
+  </div>
+  <div class="toolbar" style="margin-top:14px">
+    <button class="btn green" id="seq14RunBtn" onclick="seq14Run()">Paleisti Historical Regime Replay</button>
+  </div>
+  <div id="seq14Status" class="status">Dar nepaleista.</div>
+  <div id="seq14Summary" class="report" style="margin-top:14px"></div>
+  <div id="seq14Episodes" class="scroll" style="margin-top:14px"></div>
+  <div id="seq14Forward" class="scroll" style="margin-top:14px"></div>
+  <div id="seq14Final" class="report" style="margin-top:14px"></div>
 </section>
 
 </main>
@@ -3080,6 +3104,231 @@ function seq13Run(){
       latest:latestRows,trend:trendRows,verdict
     }));
     st.textContent='Regime Stability Scan baigtas.';
+  }catch(e){
+    st.innerHTML='<b>Klaida:</b> '+qesc(e.message||e);
+  }finally{btn.disabled=false}
+}
+</script>
+
+
+<script>
+/* OMEGA Sequence Lab 1.4 — Historical Regime Replay
+   Frozen trigger = all six rolling OOS edges > 0.
+   Future horizons are evaluated only after each historical trigger. */
+function s14rng(seed){
+  let x=(seed>>>0)||135791357;
+  return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return ((x>>>0)/4294967296)}
+}
+function s14mean(a){return a.length?a.reduce((s,x)=>s+x,0)/a.length:0}
+function s14q(a,p){
+  if(!a.length)return NaN;
+  const b=[...a].sort((x,y)=>x-y),i=(b.length-1)*p,l=Math.floor(i),h=Math.ceil(i);
+  return l===h?b[l]:b[l]+(b[h]-b[l])*(i-l);
+}
+function s14fmt(x,d=3){return Number.isFinite(x)?x.toFixed(d):'—'}
+function s14Top2(m){return [...m.entries()].sort((a,b)=>b[1]-a[1]||a[0]-b[0]).slice(0,2).map(x=>x[0])}
+
+function s14BuildHitSeries(data,minTrain){
+  const hit=Array(data.length).fill(null),pred=Array(data.length).fill(null);
+  for(let i=minTrain;i<data.length;i++){
+    const hist=data.slice(0,i);
+    const top=s14Top2(s12Consensus(hist));
+    pred[i]=top;
+    const actual=data[i].euro||[];
+    hit[i]=top.filter(n=>actual.includes(n)).length;
+  }
+  return {hit,pred};
+}
+function s14RollAvg(hit,end,len){
+  const start=end-len;
+  if(start<0)return NaN;
+  let s=0,n=0;
+  for(let i=start;i<end;i++){
+    if(hit[i]===null || hit[i]===undefined) return NaN;
+    s+=hit[i];n++;
+  }
+  return n?s/n:NaN;
+}
+function s14TriggerAt(hit,end,lengths){
+  let pos=0,edges=[];
+  for(const len of lengths){
+    const avg=s14RollAvg(hit,end,len);
+    if(!Number.isFinite(avg))return {ok:false,pos:0,edges:[]};
+    const edge=avg-1/3;edges.push({len,avg,edge});
+    if(edge>0)pos++;
+  }
+  return {ok:pos===lengths.length,pos,edges};
+}
+function s14Episodes(data,hit,minAnchor,maxAnchor,lengths){
+  const entries=[];
+  let prev=false;
+  for(let a=minAnchor;a<=maxAnchor;a++){
+    const t=s14TriggerAt(hit,a,lengths);
+    if(t.ok && !prev){
+      entries.push({anchor:a,date:data[a-1].date,edges:t.edges});
+    }
+    prev=t.ok;
+  }
+  return entries;
+}
+function s14FutureRows(data,hit,episodes,h){
+  const rows=[];
+  for(const e of episodes){
+    if(e.anchor+h>data.length)continue;
+    const vals=[];
+    for(let i=e.anchor;i<e.anchor+h;i++) vals.push(hit[i]);
+    if(vals.some(v=>v===null||v===undefined))continue;
+    rows.push({
+      date:e.date,anchor:e.anchor,h,
+      avg:s14mean(vals),edge:s14mean(vals)-1/3,
+      total:vals.reduce((a,b)=>a+b,0),
+      vals
+    });
+  }
+  return rows;
+}
+function s14BootstrapEpisode(rows,iters,seed){
+  const rng=s14rng(seed),edges=[];
+  if(!rows.length)return {lo:NaN,hi:NaN};
+  for(let t=0;t<iters;t++){
+    let s=0,n=0;
+    for(let j=0;j<rows.length;j++){
+      const r=rows[Math.floor(rng()*rows.length)];
+      s+=r.total;n+=r.h;
+    }
+    edges.push(s/n-1/3);
+  }
+  return {lo:s14q(edges,.025),hi:s14q(edges,.975)};
+}
+function s14MonteCarlo(rows,iters,seed){
+  const rng=s14rng(seed);
+  const obs=rows.reduce((s,r)=>s+r.total,0);
+  const n=rows.reduce((s,r)=>s+r.h,0);
+  let ge=0;
+  for(let t=0;t<iters;t++){
+    let tot=0;
+    for(let j=0;j<n;j++){
+      // random ticket with 2 distinct Euro numbers vs random true 2-of-12 draw:
+      // simulate intersection size directly by sampling prediction and actual.
+      let a=1+Math.floor(rng()*12),b=a;
+      while(b===a)b=1+Math.floor(rng()*12);
+      let c=1+Math.floor(rng()*12),d=c;
+      while(d===c)d=1+Math.floor(rng()*12);
+      if(a===c||a===d)tot++;
+      if(b===c||b===d)tot++;
+    }
+    if(tot>=obs)ge++;
+  }
+  return {p:(ge+1)/(iters+1),obs,n};
+}
+function s14PermuteFuture(data,pred,episodes,h,iters,seed){
+  const usable=episodes.filter(e=>e.anchor+h<=data.length);
+  if(!usable.length)return {p:NaN};
+  const rng=s14rng(seed);
+  let obs=0,n=0;
+  const pool=[];
+  for(const e of usable){
+    for(let i=e.anchor;i<e.anchor+h;i++){
+      obs += pred[i].filter(x=>(data[i].euro||[]).includes(x)).length;
+      n++;
+      pool.push(data[i].euro||[]);
+    }
+  }
+  let ge=0;
+  for(let t=0;t<iters;t++){
+    const idx=[...pool.keys()];
+    for(let i=idx.length-1;i>0;i--){
+      const j=Math.floor(rng()*(i+1));[idx[i],idx[j]]=[idx[j],idx[i]];
+    }
+    let k=0,tot=0;
+    for(const e of usable){
+      for(let i=e.anchor;i<e.anchor+h;i++){
+        tot+=pred[i].filter(x=>pool[idx[k++]].includes(x)).length;
+      }
+    }
+    if(tot>=obs)ge++;
+  }
+  return {p:(ge+1)/(iters+1),obs,n};
+}
+function seq14Run(){
+  const btn=document.getElementById('seq14RunBtn'),st=document.getElementById('seq14Status'),
+        sum=document.getElementById('seq14Summary'),epBox=document.getElementById('seq14Episodes'),
+        fwd=document.getElementById('seq14Forward'),fin=document.getElementById('seq14Final');
+  try{
+    btn.disabled=true;
+    st.textContent='Historical Replay: kuriama chronologinė Frozen Consensus hit serija…';
+    const data=qera(),lengths=[24,36,48,60,72,96],minTrain=120;
+    if(data.length<300)throw Error('Historical Replay reikia bent 300 vienodo EURO 1–12 režimo tiražų.');
+
+    const series=s14BuildHitSeries(data,minTrain);
+    const minAnchor=minTrain+Math.max(...lengths);
+    const maxAnchor=data.length-12;
+    const episodes=s14Episodes(data,series.hit,minAnchor,maxAnchor,lengths);
+
+    const current=s14TriggerAt(series.hit,data.length,lengths);
+    sum.innerHTML=`<b>Istorija:</b> ${data[0].date} → ${data.at(-1).date} • ${data.length} tiražų.<br>
+      <b>Primary trigger:</b> visi 6 rolling edge &gt; 0 (${lengths.join(', ')}).<br>
+      <b>Dabartinė būsena:</b> ${current.ok?'<span style="color:#69e6b8">TRIGGER ACTIVE — 6/6 teigiami</span>':'trigger neaktyvus'}<br>
+      <b>Istoriniai režimo įėjimai:</b> ${episodes.length}.`;
+
+    epBox.innerHTML=`<h3>Istoriniai 6/6 režimo įėjimo taškai</h3>`+
+      (episodes.length?`<table style="width:100%">
+        <thead><tr><th>#</th><th>Data</th><th>24</th><th>36</th><th>48</th><th>60</th><th>72</th><th>96</th></tr></thead>
+        <tbody>${episodes.map((e,i)=>`<tr>
+          <td>${i+1}</td><td>${e.date}</td>
+          ${e.edges.map(x=>`<td>+${s14fmt(x.edge)}</td>`).join('')}
+        </tr>`).join('')}</tbody></table>`:
+        '<div class="notice">Praeityje nė vieno pilno 6/6 režimo įėjimo nerasta.</div>');
+
+    const horizons=[12,24,36];
+    const stats=horizons.map((h,hi)=>{
+      const rows=s14FutureRows(data,series.hit,episodes,h);
+      const totalN=rows.reduce((s,r)=>s+r.h,0);
+      const totalHits=rows.reduce((s,r)=>s+r.total,0);
+      const avg=totalN?totalHits/totalN:NaN,edge=avg-1/3;
+      const boot=s14BootstrapEpisode(rows,6000,21000+h);
+      const mc=s14MonteCarlo(rows,12000,22000+h);
+      const perm=s14PermuteFuture(data,series.pred,episodes,h,6000,23000+h);
+      return {h,rows,totalN,totalHits,avg,edge,boot,mc,perm};
+    });
+
+    fwd.innerHTML=`<h3>Kas nutiko PO istorinių regime triggerių?</h3>
+      <table style="width:100%">
+      <thead><tr><th>Ateitis</th><th>Epizodai</th><th>Hit</th><th>Random</th><th>Edge</th><th>95% CI</th><th>MC p</th><th>Perm p</th></tr></thead>
+      <tbody>${stats.map(r=>`<tr>
+        <td>${r.h} tiražų</td><td>${r.rows.length}</td>
+        <td>${s14fmt(r.avg)}</td><td>0.333</td>
+        <td>${r.edge>=0?'+':''}${s14fmt(r.edge)}</td>
+        <td>[${r.boot.lo>=0?'+':''}${s14fmt(r.boot.lo)}, ${r.boot.hi>=0?'+':''}${s14fmt(r.boot.hi)}]</td>
+        <td>${s14fmt(r.mc.p,4)}</td><td>${s14fmt(r.perm.p,4)}</td>
+      </tr>`).join('')}</tbody></table>`;
+
+    const enough=episodes.length>=5;
+    const positive=stats.filter(r=>r.edge>0).length;
+    const strict=stats.filter(r=>r.edge>0 && r.boot.lo>0 && r.mc.p<.05 && r.perm.p<.05).length;
+    let verdict='INSUFFICIENT HISTORICAL EPISODES',color='#ffcf66';
+    if(enough){
+      if(strict>=2 && positive===3){verdict='HISTORICAL REGIME SUPPORT';color='#69e6b8'}
+      else if(positive>=2){verdict='INCONCLUSIVE / WEAK SUPPORT';color='#ffcf66'}
+      else {verdict='REGIME NOT SUPPORTED';color='#ff8080'}
+    }
+
+    fin.innerHTML=`<b>Historical Regime Replay verdiktas:
+      <span style="color:${color}">${verdict}</span></b><br>
+      Istorinių nepriklausomų 6/6 režimo įėjimų: <b>${episodes.length}</b>.<br>
+      Teigiami future horizontai: <b>${positive}/3</b>. Griežtai patvirtinti: <b>${strict}/3</b>.<br>
+      <small>Mažiau nei 5 istorinių epizodų laikoma per maža imtimi patikimai išvadai.
+      Šis testas neperrenka triggerio pagal gautą rezultatą ir dabartinio 2026 režimo ateitis
+      į istorinį vertinimą neįtraukiama.</small>`;
+
+    localStorage.setItem('omegaSequenceLab14',JSON.stringify({
+      at:new Date().toISOString(),through:data.at(-1).date,
+      currentTrigger:current.ok,episodeCount:episodes.length,
+      episodes:episodes.map(e=>({date:e.date,edges:e.edges})),
+      horizons:stats.map(r=>({h:r.h,episodeCount:r.rows.length,avg:r.avg,edge:r.edge,boot:r.boot,mc:r.mc,perm:r.perm})),
+      verdict
+    }));
+    st.textContent='Historical Regime Replay baigtas.';
   }catch(e){
     st.innerHTML='<b>Klaida:</b> '+qesc(e.message||e);
   }finally{btn.disabled=false}
