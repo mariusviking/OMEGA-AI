@@ -383,7 +383,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
 
 <section class="card c12" id="seq14ReplayCard">
-  <h2>OMEGA Sequence Lab 1.4.1 — Historical Regime Replay (Bugfix)</h2>
+  <h2>OMEGA Sequence Lab 1.5 — Historical Regime Replay (Bugfix)</h2>
   <p>
     Šis etapas atsako į konkretų klausimą: <b>kai istorijoje atsirasdavo būsena,
     panaši į dabartinę 6/6 teigiamų langų būseną, kas nutikdavo po jos?</b>
@@ -404,6 +404,28 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="seq14Episodes" class="scroll" style="margin-top:14px"></div>
   <div id="seq14Forward" class="scroll" style="margin-top:14px"></div>
   <div id="seq14Final" class="report" style="margin-top:14px"></div>
+</section>
+
+
+<section class="card c12" id="seq15IndependentEpisodesCard">
+  <h2>OMEGA Sequence Lab 1.5 — Independent Regime Episodes</h2>
+  <p>
+    Šis etapas taiso svarbią metodologinę problemą: keli 6/6 triggeriai, atsiradę labai arti vienas kito,
+    gali priklausyti tam pačiam ilgam režimui. Todėl jie nebeskaičiuojami kaip atskiri nepriklausomi epizodai.
+  </p>
+  <div class="notice">
+    <b>Episode taisyklė užšaldyta iš anksto:</b> 6/6 triggeriai, kurių tarpas mažesnis nei 36 tiražai,
+    sujungiami į vieną režimo epizodą. Ateitis vertinama tik nuo pirmo to epizodo triggerio.
+    Frozen Consensus, 6/6 triggeris ir 12/24/36 ateities horizontai nekeičiami.
+  </div>
+  <div class="toolbar" style="margin-top:14px">
+    <button class="btn green" id="seq15RunBtn" onclick="seq15Run()">Paleisti Independent Regime Episodes</button>
+  </div>
+  <div id="seq15Status" class="status">Dar nepaleista.</div>
+  <div id="seq15Summary" class="report" style="margin-top:14px"></div>
+  <div id="seq15Episodes" class="scroll" style="margin-top:14px"></div>
+  <div id="seq15Forward" class="scroll" style="margin-top:14px"></div>
+  <div id="seq15Final" class="report" style="margin-top:14px"></div>
 </section>
 
 </main>
@@ -3344,6 +3366,154 @@ function seq14Run(){
       verdict
     }));
     st.textContent='Historical Regime Replay baigtas.';
+  }catch(e){
+    st.innerHTML='<b>Klaida:</b> '+qesc(e.message||e);
+  }finally{btn.disabled=false}
+}
+</script>
+
+
+<script>
+/* OMEGA Sequence Lab 1.5 — Independent Regime Episodes
+   Deduplicates nearby 6/6 trigger entries into one independent episode. */
+function s15ClusterEpisodes(entries,minGapDraws){
+  if(!entries.length)return [];
+  const sorted=[...entries].sort((a,b)=>a.anchor-b.anchor);
+  const clusters=[];
+  let cur={
+    startAnchor:sorted[0].anchor,
+    endAnchor:sorted[0].anchor,
+    firstDate:sorted[0].date,
+    lastDate:sorted[0].date,
+    entries:[sorted[0]]
+  };
+  for(let i=1;i<sorted.length;i++){
+    const e=sorted[i];
+    if(e.anchor-cur.endAnchor < minGapDraws){
+      cur.endAnchor=e.anchor;
+      cur.lastDate=e.date;
+      cur.entries.push(e);
+    }else{
+      clusters.push(cur);
+      cur={
+        startAnchor:e.anchor,endAnchor:e.anchor,
+        firstDate:e.date,lastDate:e.date,
+        entries:[e]
+      };
+    }
+  }
+  clusters.push(cur);
+  return clusters;
+}
+function s15IndependentEntries(clusters){
+  return clusters.map(c=>c.entries[0]);
+}
+function s15FutureRows(data,hit,episodes,h){
+  const rows=[];
+  for(const e of episodes){
+    if(e.anchor+h>data.length)continue;
+    const vals=[];
+    for(let i=e.anchor;i<e.anchor+h;i++)vals.push(hit[i]);
+    if(vals.some(v=>v===null||v===undefined))continue;
+    rows.push({
+      date:e.date,anchor:e.anchor,h,
+      avg:s14mean(vals),edge:s14mean(vals)-1/3,
+      total:vals.reduce((a,b)=>a+b,0),
+      vals
+    });
+  }
+  return rows;
+}
+function seq15Run(){
+  const btn=document.getElementById('seq15RunBtn'),st=document.getElementById('seq15Status'),
+        sum=document.getElementById('seq15Summary'),epBox=document.getElementById('seq15Episodes'),
+        fwd=document.getElementById('seq15Forward'),fin=document.getElementById('seq15Final');
+  try{
+    btn.disabled=true;
+    st.textContent='Independent Episodes: grupuojami persidengiantys 6/6 režimo triggeriai…';
+    const data=qera(),lengths=[24,36,48,60,72,96],minTrain=120;
+    if(data.length<300)throw Error('Independent Episodes testui reikia bent 300 vienodo EURO 1–12 režimo tiražų.');
+
+    const series=s14BuildHitSeries(data,minTrain);
+    const minAnchor=minTrain+Math.max(...lengths);
+    const maxAnchor=data.length-12;
+    const raw=s14Episodes(data,series.hit,minAnchor,maxAnchor,lengths);
+
+    const minGapDraws=36;
+    const clusters=s15ClusterEpisodes(raw,minGapDraws);
+    const independent=s15IndependentEntries(clusters);
+
+    const current=s14TriggerAt(series.hit,data.length,lengths);
+
+    sum.innerHTML=`<b>Istorija:</b> ${data[0].date} → ${data.at(-1).date} • ${data.length} tiražų.<br>
+      <b>Žali 6/6 triggeriai:</b> ${raw.length}.<br>
+      <b>Po deduplikavimo:</b> ${independent.length} nepriklausomi epizodai.<br>
+      <b>Sujungimo taisyklė:</b> jei triggerių tarpas &lt; ${minGapDraws} tiražai, jie laikomi vienu režimo epizodu.<br>
+      <b>Dabartinė būsena:</b> ${current.ok?'<span style="color:#69e6b8">TRIGGER ACTIVE — 6/6</span>':'trigger neaktyvus'}.`;
+
+    epBox.innerHTML=`<h3>Nepriklausomi režimo epizodai</h3>`+
+      (clusters.length?`<table style="width:100%">
+        <thead><tr><th>#</th><th>Epizodo pradžia</th><th>Paskutinis artimas triggeris</th><th>Triggerių sk.</th><th>Pradinis 24/36/48/60/72/96 edge</th></tr></thead>
+        <tbody>${clusters.map((c,i)=>{
+          const e=c.entries[0];
+          return `<tr><td>${i+1}</td><td>${c.firstDate}</td><td>${c.lastDate}</td><td>${c.entries.length}</td>
+            <td>${e.edges.map(x=>'+'+s14fmt(x.edge)).join(' / ')}</td></tr>`;
+        }).join('')}</tbody></table>`:
+        '<div class="notice">Nepriklausomų epizodų nerasta.</div>');
+
+    const horizons=[12,24,36];
+    const stats=horizons.map(h=>{
+      const rows=s15FutureRows(data,series.hit,independent,h);
+      const totalN=rows.reduce((s,r)=>s+r.h,0);
+      const totalHits=rows.reduce((s,r)=>s+r.total,0);
+      const avg=totalN?totalHits/totalN:NaN,edge=avg-1/3;
+      const boot=s14BootstrapEpisode(rows,8000,31000+h);
+      const mc=s14MonteCarlo(rows,16000,32000+h);
+      const perm=s14PermuteFuture(data,series.pred,independent,h,8000,33000+h);
+      return {h,rows,totalN,totalHits,avg,edge,boot,mc,perm};
+    });
+
+    fwd.innerHTML=`<h3>Kas nutiko PO nepriklausomų režimo epizodų?</h3>
+      <table style="width:100%">
+      <thead><tr><th>Ateitis</th><th>Epizodai</th><th>Hit</th><th>Random</th><th>Edge</th><th>95% CI</th><th>MC p</th><th>Perm p</th></tr></thead>
+      <tbody>${stats.map(r=>`<tr>
+        <td>${r.h} tiražų</td><td>${r.rows.length}</td>
+        <td>${s14fmt(r.avg)}</td><td>0.333</td>
+        <td>${r.edge>=0?'+':''}${s14fmt(r.edge)}</td>
+        <td>[${r.boot.lo>=0?'+':''}${s14fmt(r.boot.lo)}, ${r.boot.hi>=0?'+':''}${s14fmt(r.boot.hi)}]</td>
+        <td>${s14fmt(r.mc.p,4)}</td><td>${s14fmt(r.perm.p,4)}</td>
+      </tr>`).join('')}</tbody></table>`;
+
+    const usableCounts=stats.map(r=>r.rows.length);
+    const minUsable=Math.min(...usableCounts);
+    const enough=minUsable>=5;
+    const positive=stats.filter(r=>r.edge>0).length;
+    const strict=stats.filter(r=>r.edge>0 && r.boot.lo>0 && r.mc.p<.05 && r.perm.p<.05).length;
+
+    let verdict='INSUFFICIENT INDEPENDENT EPISODES',color='#ffcf66';
+    if(enough){
+      if(strict>=2 && positive===3){verdict='INDEPENDENT REGIME SUPPORT';color='#69e6b8'}
+      else if(positive>=2){verdict='INCONCLUSIVE / WEAK SUPPORT';color='#ffcf66'}
+      else {verdict='REGIME NOT SUPPORTED';color='#ff8080'}
+    }
+
+    fin.innerHTML=`<b>Independent Regime Episodes verdiktas:
+      <span style="color:${color}">${verdict}</span></b><br>
+      Žali triggeriai: <b>${raw.length}</b> → nepriklausomi epizodai: <b>${independent.length}</b>.<br>
+      Mažiausias panaudojamų epizodų skaičius per horizontus: <b>${minUsable}</b>.<br>
+      Teigiami future horizontai: <b>${positive}/3</b>. Griežtai patvirtinti: <b>${strict}/3</b>.<br>
+      <small>Šis testas sąmoningai baudžia persidengiančius režimus: nuo kiekvienos glaudžios triggerių grupės
+      naudojamas tik pirmasis įėjimas. Jei po deduplikavimo lieka mažiau nei 5 tinkami epizodai,
+      programa neleidžia stiprios išvados, net jei edge atrodo didelis.</small>`;
+
+    localStorage.setItem('omegaSequenceLab15',JSON.stringify({
+      at:new Date().toISOString(),through:data.at(-1).date,minGapDraws,
+      rawCount:raw.length,clusterCount:clusters.length,
+      clusters:clusters.map(c=>({firstDate:c.firstDate,lastDate:c.lastDate,count:c.entries.length,startAnchor:c.startAnchor,endAnchor:c.endAnchor})),
+      horizons:stats.map(r=>({h:r.h,episodeCount:r.rows.length,avg:r.avg,edge:r.edge,boot:r.boot,mc:r.mc,perm:r.perm})),
+      verdict
+    }));
+    st.textContent='Independent Regime Episodes baigtas.';
   }catch(e){
     st.innerHTML='<b>Klaida:</b> '+qesc(e.message||e);
   }finally{btn.disabled=false}
