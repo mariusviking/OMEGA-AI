@@ -383,7 +383,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
 
 <section class="card c12" id="seq14ReplayCard">
-  <h2>OMEGA Sequence Lab 1.5 — Historical Regime Replay (Bugfix)</h2>
+  <h2>OMEGA Sequence Lab 2.0 — Historical Regime Replay (Bugfix)</h2>
   <p>
     Šis etapas atsako į konkretų klausimą: <b>kai istorijoje atsirasdavo būsena,
     panaši į dabartinę 6/6 teigiamų langų būseną, kas nutikdavo po jos?</b>
@@ -426,6 +426,30 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="seq15Episodes" class="scroll" style="margin-top:14px"></div>
   <div id="seq15Forward" class="scroll" style="margin-top:14px"></div>
   <div id="seq15Final" class="report" style="margin-top:14px"></div>
+</section>
+
+
+<section class="card c12" id="seq20PatternDiscoveryCard">
+  <h2>OMEGA Sequence Lab 2.0 — Pattern Discovery Engine</h2>
+  <p>
+    Šis modulis nebeieško vien iš anksto pasirinkto 6/6 režimo. Jis kiekvienam istoriniam
+    tiražo taškui sukuria <b>būsenos piršto atspaudą</b>, suranda panašiausias ankstesnes būsenas
+    ir patikrina, kas realiai iškrito <b>kitame tiraže</b>.
+  </p>
+  <div class="notice">
+    <b>Leakage kontrolė:</b> kiekvienas istorinis tikslinis tiražas vertinamas tik iš dar ankstesnių tiražų.
+    Dabartinė būsena lyginama su praeities analogais, o analogų sekantys tiražai naudojami tik kaip empirinė
+    „kas buvo po panašios situacijos“ statistika. MAIN ir EURO vertinami atskirai.
+  </div>
+  <div class="toolbar" style="margin-top:14px">
+    <button class="btn green" id="seq20RunBtn" onclick="seq20Run()">Paleisti Pattern Discovery Engine</button>
+  </div>
+  <div id="seq20Status" class="status">Dar nepaleista.</div>
+  <div id="seq20Summary" class="report" style="margin-top:14px"></div>
+  <div id="seq20Analogs" class="scroll" style="margin-top:14px"></div>
+  <div id="seq20Map" class="report" style="margin-top:14px"></div>
+  <div id="seq20Validation" class="scroll" style="margin-top:14px"></div>
+  <div id="seq20Final" class="report" style="margin-top:14px"></div>
 </section>
 
 </main>
@@ -3516,6 +3540,242 @@ function seq15Run(){
     st.textContent='Independent Regime Episodes baigtas.';
   }catch(e){
     st.innerHTML='<b>Klaida:</b> '+qesc(e.message||e);
+  }finally{btn.disabled=false}
+}
+</script>
+
+
+<script>
+/* OMEGA Sequence Lab 2.0 — Pattern Discovery Engine
+   Historical-state fingerprint + nearest analog next-draw replay.
+   No future leakage in walk-forward validation. */
+
+function s20mean(a){return a.length?a.reduce((s,x)=>s+x,0)/a.length:0}
+function s20sd(a){
+  if(a.length<2)return 1;
+  const m=s20mean(a),v=s20mean(a.map(x=>(x-m)*(x-m)));
+  return Math.sqrt(v)||1;
+}
+function s20sum(a){return a.reduce((s,x)=>s+x,0)}
+function s20count(arr,maxN){
+  const c=Array(maxN).fill(0);
+  arr.forEach(n=>{if(n>=1&&n<=maxN)c[n-1]++});
+  return c;
+}
+function s20freq(hist,key,maxN,w){
+  const h=hist.slice(-w),c=Array(maxN).fill(0);
+  h.forEach(d=>(d[key]||[]).forEach(n=>{if(n>=1&&n<=maxN)c[n-1]++}));
+  const den=Math.max(1,h.length);
+  return c.map(x=>x/den);
+}
+function s20gaps(hist,key,maxN){
+  const out=Array(maxN).fill(hist.length+1);
+  for(let i=hist.length-1;i>=0;i--){
+    for(const n of (hist[i][key]||[])){
+      if(n>=1&&n<=maxN && out[n-1]===hist.length+1)out[n-1]=hist.length-1-i;
+    }
+  }
+  return out.map(x=>Math.min(x,60)/60);
+}
+function s20pairDensity(hist,key,w){
+  const h=hist.slice(-w),m=new Map();
+  h.forEach(d=>{
+    const a=[...(d[key]||[])].sort((x,y)=>x-y);
+    for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){
+      const k=a[i]+"-"+a[j];m.set(k,(m.get(k)||0)+1);
+    }
+  });
+  if(!m.size)return 0;
+  const vals=[...m.values()];
+  return s20mean(vals)/Math.max(1,h.length);
+}
+function s20structure(hist){
+  const last=hist.at(-1)||{numbers:[],euro:[]};
+  const prev=hist.at(-2)||{numbers:[],euro:[]};
+  const nums=[...(last.numbers||[])].sort((a,b)=>a-b);
+  const eur=[...(last.euro||[])].sort((a,b)=>a-b);
+  const gaps=[];
+  for(let i=1;i<nums.length;i++)gaps.push((nums[i]-nums[i-1])/50);
+  return [
+    s20sum(nums)/(5*50),
+    nums.filter(n=>n%2).length/5,
+    nums.filter(n=>n<=25).length/5,
+    nums.length?(nums.at(-1)-nums[0])/50:0,
+    gaps.length?s20mean(gaps):0,
+    nums.filter(n=>prev.numbers?.includes(n)).length/5,
+    eur.length?s20sum(eur)/(2*12):0,
+    eur.filter(n=>prev.euro?.includes(n)).length/2,
+    s20pairDensity(hist,"numbers",24),
+    s20pairDensity(hist,"euro",24)
+  ];
+}
+function s20fingerprint(hist){
+  // compact feature vector: multi-horizon frequencies, gaps, trends and structural state
+  const f6=s20freq(hist,"numbers",50,6), f12=s20freq(hist,"numbers",50,12), f24=s20freq(hist,"numbers",50,24),
+        f36=s20freq(hist,"numbers",50,36);
+  const e6=s20freq(hist,"euro",12,6),e12=s20freq(hist,"euro",12,12),e24=s20freq(hist,"euro",12,24),
+        e36=s20freq(hist,"euro",12,36);
+  const ng=s20gaps(hist,"numbers",50),eg=s20gaps(hist,"euro",12);
+  const mainAgg=[
+    s20mean(f6),s20sd(f6),s20mean(f12),s20sd(f12),
+    s20mean(f24),s20sd(f24),s20mean(f36),s20sd(f36),
+    s20mean(ng),s20sd(ng)
+  ];
+  const euroAgg=[
+    s20mean(e6),s20sd(e6),s20mean(e12),s20sd(e12),
+    s20mean(e24),s20sd(e24),s20mean(e36),s20sd(e36),
+    s20mean(eg),s20sd(eg)
+  ];
+  // Include top-rank concentration/trend summaries without exploding dimensionality.
+  const topAvg=(a,k)=>[...a].sort((x,y)=>y-x).slice(0,k).reduce((s,x)=>s+x,0)/k;
+  const trendMain=f6.map((x,i)=>x-f36[i]);
+  const trendEuro=e6.map((x,i)=>x-e36[i]);
+  return [
+    ...mainAgg,...euroAgg,
+    topAvg(f6,5),topAvg(f12,5),topAvg(f24,5),topAvg(f36,5),
+    topAvg(e6,2),topAvg(e12,2),topAvg(e24,2),topAvg(e36,2),
+    s20mean(trendMain),s20sd(trendMain),topAvg(trendMain,5),
+    s20mean(trendEuro),s20sd(trendEuro),topAvg(trendEuro,2),
+    ...s20structure(hist)
+  ];
+}
+function s20distance(a,b){
+  let s=0;
+  for(let i=0;i<Math.min(a.length,b.length);i++){
+    const d=a[i]-b[i];s+=d*d;
+  }
+  return Math.sqrt(s/Math.max(1,Math.min(a.length,b.length)));
+}
+function s20Analogs(data,targetIndex,k,minTrain){
+  const targetHist=data.slice(0,targetIndex);
+  const tf=s20fingerprint(targetHist);
+  const rows=[];
+  for(let i=minTrain;i<targetIndex-1;i++){
+    // i is historical state AFTER draw i-1; next draw is i
+    const hist=data.slice(0,i);
+    const f=s20fingerprint(hist);
+    rows.push({
+      stateIndex:i,
+      stateDate:data[i-1].date,
+      nextDate:data[i].date,
+      distance:s20distance(tf,f),
+      nextMain:[...data[i].numbers],
+      nextEuro:[...data[i].euro]
+    });
+  }
+  return rows.sort((a,b)=>a.distance-b.distance).slice(0,k);
+}
+function s20WeightedMap(analogs,key,maxN){
+  const m=new Map();for(let n=1;n<=maxN;n++)m.set(n,0);
+  if(!analogs.length)return m;
+  const weights=analogs.map(a=>1/(0.02+a.distance));
+  const sw=weights.reduce((s,x)=>s+x,0)||1;
+  analogs.forEach((a,i)=>{
+    const w=weights[i]/sw;
+    for(const n of a[key])m.set(n,m.get(n)+w);
+  });
+  return m;
+}
+function s20Top(m,k){return [...m.entries()].sort((a,b)=>b[1]-a[1]||a[0]-b[0]).slice(0,k)}
+function s20WalkForward(data,key,maxN,picks,k,minTrain,startIndex){
+  const rows=[];
+  for(let i=startIndex;i<data.length;i++){
+    const analogs=s20Analogs(data,i,k,minTrain);
+    if(analogs.length<Math.min(10,k))continue;
+    const map=s20WeightedMap(analogs,key,maxN);
+    const top=s20Top(map,picks).map(x=>x[0]);
+    const actual=data[i][key]||[];
+    const hit=top.filter(n=>actual.includes(n)).length;
+    rows.push({date:data[i].date,hit,top,actual:[...actual],analogCount:analogs.length});
+  }
+  return rows;
+}
+function s20EdgeStats(rows,base){
+  const avg=s20mean(rows.map(r=>r.hit)),edge=avg-base;
+  const n=rows.length;
+  const seg=[0,1,2].map(j=>{
+    const a=Math.floor(n*j/3),b=Math.floor(n*(j+1)/3);
+    return s20mean(rows.slice(a,b).map(r=>r.hit))-base;
+  });
+  const hold=rows.slice(Math.floor(n*.8));
+  return {n,avg,edge,seg,pos:seg.filter(x=>x>0).length,holdEdge:s20mean(hold.map(r=>r.hit))-base};
+}
+function s20fmt(x,d=3){return Number.isFinite(x)?x.toFixed(d):"—"}
+
+function seq20Run(){
+  const btn=document.getElementById("seq20RunBtn"),st=document.getElementById("seq20Status"),
+        sum=document.getElementById("seq20Summary"),analogBox=document.getElementById("seq20Analogs"),
+        mapBox=document.getElementById("seq20Map"),valBox=document.getElementById("seq20Validation"),
+        fin=document.getElementById("seq20Final");
+  try{
+    btn.disabled=true;
+    st.textContent="Pattern Discovery: kuriami būsenų pirštų atspaudai ir istorinių analogų replay…";
+
+    const data=qera();
+    if(data.length<250)throw Error("Pattern Discovery reikia bent 250 vienodo EURO 1–12 režimo tiražų.");
+
+    const minTrain=120,k=24,currentIndex=data.length;
+    const currentAnalogs=s20Analogs(data,currentIndex,k,minTrain);
+    const mainMap=s20WeightedMap(currentAnalogs,"nextMain",50);
+    const euroMap=s20WeightedMap(currentAnalogs,"nextEuro",12);
+
+    sum.innerHTML=`<b>Istorija:</b> ${data[0].date} → ${data.at(-1).date} • ${data.length} tiražų.<br>
+      <b>Dabartinė būsena:</b> paremta duomenimis iki ${data.at(-1).date}.<br>
+      <b>Naudojami analogai:</b> ${currentAnalogs.length} artimiausios ankstesnės būsenos iš chronologinės istorijos.<br>
+      <b>Modelis:</b> state fingerprint → nearest analogs → actual next-draw outcomes.`;
+
+    analogBox.innerHTML=`<h3>12 artimiausių istorinių analogų ir kas iškrito po jų</h3>
+      <table style="width:100%">
+      <thead><tr><th>#</th><th>Panašios būsenos data</th><th>Atstumas</th><th>Kitas tiražas</th><th>MAIN po jos</th><th>EURO po jos</th></tr></thead>
+      <tbody>${currentAnalogs.slice(0,12).map((a,i)=>`<tr>
+        <td>${i+1}</td><td>${a.stateDate}</td><td>${s20fmt(a.distance,4)}</td><td>${a.nextDate}</td>
+        <td>${a.nextMain.join(" ")}</td><td>${a.nextEuro.join(" ")}</td>
+      </tr>`).join("")}</tbody></table>`;
+
+    const mainTop=s20Top(mainMap,15),euroTop=s20Top(euroMap,8);
+    mapBox.innerHTML=`<b>Dabartinės būsenos analogų NEXT-DRAW žemėlapis</b><br>
+      <small>Tai empirinė analogų dalis, ne garantuota tikimybė.</small><br><br>
+      <b>MAIN TOP 15:</b><br>${mainTop.map((x,i)=>`${i+1}. ${x[0]} — ${(x[1]*100).toFixed(1)}%`).join(" • ")}<br><br>
+      <b>EURO TOP 8:</b><br>${euroTop.map((x,i)=>`${i+1}. ${x[0]} — ${(x[1]*100).toFixed(1)}%`).join(" • ")}`;
+
+    const startIndex=Math.max(minTrain+30,Math.floor(data.length*.35));
+    const mainWF=s20WalkForward(data,"numbers",50,5,k,minTrain,startIndex);
+    const euroWF=s20WalkForward(data,"euro",12,2,k,minTrain,startIndex);
+    const ms=s20EdgeStats(mainWF,.5),es=s20EdgeStats(euroWF,1/3);
+
+    valBox.innerHTML=`<h3>Leakage-safe walk-forward validation</h3>
+      <table style="width:100%">
+      <thead><tr><th>Dalis</th><th>N</th><th>WF hit</th><th>Random</th><th>Edge</th><th>Holdout edge</th><th>Teigiami segmentai</th></tr></thead>
+      <tbody>
+        <tr><td>MAIN analog discovery</td><td>${ms.n}</td><td>${s20fmt(ms.avg)}</td><td>0.500</td><td>${ms.edge>=0?"+":""}${s20fmt(ms.edge)}</td><td>${ms.holdEdge>=0?"+":""}${s20fmt(ms.holdEdge)}</td><td>${ms.pos}/3</td></tr>
+        <tr><td>EURO analog discovery</td><td>${es.n}</td><td>${s20fmt(es.avg)}</td><td>0.333</td><td>${es.edge>=0?"+":""}${s20fmt(es.edge)}</td><td>${es.holdEdge>=0?"+":""}${s20fmt(es.holdEdge)}</td><td>${es.pos}/3</td></tr>
+      </tbody></table>`;
+
+    const mainOk=ms.edge>0.02 && ms.holdEdge>0 && ms.pos>=2;
+    const euroOk=es.edge>0.02 && es.holdEdge>0 && es.pos>=2;
+    let verdict="NO ROBUST NEXT-DRAW SIGNAL";
+    let color="#ffcf66";
+    if(mainOk||euroOk){
+      verdict=(mainOk?"MAIN ":"")+(euroOk?"EURO ":"")+"PATTERN CANDIDATE";
+      color="#69e6b8";
+    }
+
+    fin.innerHTML=`<b>Pattern Discovery verdictas:
+      <span style="color:${color}">${verdict}</span></b><br>
+      MAIN: ${mainOk?"candidate":"no robust signal"} • EURO: ${euroOk?"candidate":"no robust signal"}.<br>
+      <small>Candidate čia reiškia tik tai, kad analogų metodas walk-forward teste viršijo iš anksto nustatytą bazinį filtrą.
+      Tai nėra laimėjimo tikimybės garantija ir prieš praktinį naudojimą turi būti papildomai užšaldytas bei patvirtintas.</small>`;
+
+    localStorage.setItem("omegaSequenceLab20",JSON.stringify({
+      at:new Date().toISOString(),through:data.at(-1).date,k,minTrain,
+      currentAnalogs:currentAnalogs.slice(0,24),
+      mainTop,euroTop,
+      mainValidation:ms,euroValidation:es,
+      verdict
+    }));
+    st.textContent="Pattern Discovery Engine baigtas.";
+  }catch(e){
+    st.innerHTML="<b>Klaida:</b> "+qesc(e.message||e);
   }finally{btn.disabled=false}
 }
 </script>
