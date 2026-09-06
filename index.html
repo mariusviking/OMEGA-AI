@@ -476,30 +476,6 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   <div id="seq21Final" class="report" style="margin-top:14px"></div>
 </section>
 
-
-<section class="card c12" id="v34ResearchConfirmCard">
-  <h2>OMEGA V3.4 — Recent Regime Confirmation Test</h2>
-  <p>
-    Šis etapas <b>nekeičia V3.3 formulės</b>. Jis tikrina, ar naujausio režimo pagerėjimas
-    išlieka griežtesnėje kontrolėje: nepersidengiančiuose blokuose, placebo/permutation teste
-    ir atskirai pagal tris V3.3 kriterijus.
-  </p>
-  <div class="notice">
-    <b>Frozen taisyklė:</b> naudojamas tas pats OMEGA-vs-Random vertinimas kaip V3.3.
-    Naujausias 100 tiražų periodas skaidomas dviem nepriklausomais pjūviais:
-    <b>10 × 10</b> ir <b>5 × 20</b>. Papildomai atliekama 10 000 placebo/permutation kontrolė.
-    Galutinis verdiktas: <b>PASS / INCONCLUSIVE / FAIL</b>.
-  </div>
-  <div class="toolbar" style="margin-top:14px">
-    <button class="btn green" id="runV34ResearchBtn" onclick="runV34ResearchConfirmation()">Paleisti V3.4 Confirmation Test</button>
-  </div>
-  <div id="v34ResearchStatus" class="status">Dar nepaleista.</div>
-  <div id="v34ResearchSummary" class="report" style="margin-top:14px"></div>
-  <div id="v34ResearchBlocks10" class="scroll" style="margin-top:14px"></div>
-  <div id="v34ResearchBlocks20" class="scroll" style="margin-top:14px"></div>
-  <div id="v34ResearchFinal" class="report" style="margin-top:14px"></div>
-</section>
-
 </main>
 
 <section class="card c12" id="recentRegimeCard">
@@ -521,18 +497,19 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
 
 <section class="card c12" id="v34ConfirmCard">
-  <h2>OMEGA V3.4 — Non-Overlap Confirmation</h2>
+  <h2>OMEGA V3.4.1 — Recent Regime Confirmation Test</h2>
   <p>
-    Šis testas nekeičia ir neperoptimizuoja OMEGA formulės. Jis tikrina V3.3 aptiktą naujausio
-    laikotarpio signalą nepriklausomais, tarpusavyje nepersidengiančiais blokais.
+    Ši pataisyta versija yra <b>savarankiška</b>: ji pati iš istorinių tiražų iš naujo
+    apskaičiuoja 100 naujausių leakage-safe walk-forward testų ir nepriklauso nuo V3.3 tarpinių
+    „helper“ duomenų. OMEGA formulė nekeičiama ir neperoptimizuojama.
   </p>
   <div class="toolbar">
     <button class="btn green" id="runV34Btn" onclick="runV34Confirmation()">
-      Paleisti V3.4 patvirtinimą
+      Paleisti V3.4.1 Confirmation Test
     </button>
   </div>
   <div id="v34Status" class="status">
-    Bus tikrinami tie patys naujausi 100 tiražų dviem pjūviais: 10 × 10 ir 5 × 20.
+    V3.3 prieš tai paleisti nereikia. Bus perskaičiuoti 100 naujausių walk-forward taškų ir patikrinti 10 × 10 bei 5 × 20 nepersidengiantys blokai.
   </div>
   <div id="v34Results" class="scroll" style="margin-top:12px"></div>
 </section>
@@ -1972,7 +1949,9 @@ async function runRecentRegimeAudit(){
 
 
 async function runV34Confirmation(){
-  const btn=$("runV34Btn"), status=$("v34Status"), out=$("v34Results");
+  let btn, status, out;
+  try {
+  btn=$("runV34Btn"); status=$("v34Status"); out=$("v34Results");
   btn.disabled=true; out.innerHTML="";
   const H=100;
   if(draws.length < H+120){
@@ -2102,7 +2081,15 @@ async function runV34Confirmation(){
     </div>`;
 
   status.textContent="Baigta: 100 walk-forward testų • 10×10 ir 5×20 nepersidengiantys blokai.";
-  btn.disabled=false;
+
+
+  } catch(e) {
+    if(status) status.textContent="V3.4.1 techninė klaida: "+(e && e.message ? e.message : e);
+    if(out) out.innerHTML="";
+    console.error(e);
+  } finally {
+    if(btn) btn.disabled=false;
+  }
 }
 
 async function runV35RegimeValidation(){
@@ -3943,223 +3930,6 @@ async function seq21Run(){
     st.textContent="Multi-Horizon Pattern Test baigtas.";
   }catch(e){st.innerHTML="<b>Klaida:</b> "+(typeof qesc==="function"?qesc(e.message||e):(e.message||e))}
   finally{btn.disabled=false}
-}
-</script>
-
-
-<script>
-/* OMEGA V3.4 — Recent Regime Confirmation Test
-   Frozen follow-up to V3.3. No threshold tuning in this module. */
-
-function v34rMean(a){return a.length?a.reduce((s,x)=>s+x,0)/a.length:0}
-function v34rRng(seed){
-  let x=(seed>>>0)||24682468;
-  return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return ((x>>>0)/4294967296)}
-}
-function v34rFmt(x,d=3){return Number.isFinite(x)?x.toFixed(d):"—"}
-
-function v34rGetSeries(){
-  /*
-    V3.3 already computes the per-draw OMEGA-vs-Random metrics.
-    Prefer its helper if present. Fall back to the standard audit series used elsewhere.
-  */
-  if (typeof rrBuildSeries === "function"){
-    const x = rrBuildSeries();
-    if (Array.isArray(x)) return x;
-    if (x && Array.isArray(x.rows)) return x.rows;
-  }
-  if (typeof buildRecentRegimeSeries === "function"){
-    const x = buildRecentRegimeSeries();
-    if (Array.isArray(x)) return x;
-    if (x && Array.isArray(x.rows)) return x.rows;
-  }
-  if (typeof getAuditSeries === "function"){
-    const x = getAuditSeries();
-    if (Array.isArray(x)) return x;
-  }
-
-  /*
-    Final fallback: reconstruct from the 5×50 audit/backtest primitives if available.
-    Expected row fields after normalization:
-      date
-      meanHitDelta        (OMEGA avg main hits - random avg main hits)
-      ge3Delta            (percentage-point delta for >=3 main hits)
-      prizeDelta          (percentage-point delta for prize-set rate)
-  */
-  const src = (typeof DRAWS !== "undefined" ? DRAWS :
-              (typeof draws !== "undefined" ? draws :
-              (typeof BASE_DRAWS !== "undefined" ? BASE_DRAWS : [])));
-  if (!Array.isArray(src) || src.length < 120) throw new Error("Nepavyko rasti V3.3 walk-forward serijos.");
-
-  if (typeof omegaAuditPoint === "function"){
-    const rows=[];
-    for(let i=100;i<src.length;i++){
-      const p=omegaAuditPoint(i);
-      if(!p)continue;
-      rows.push({
-        date:src[i].date,
-        meanHitDelta:Number(p.meanHitDelta ?? p.avgDelta ?? p.delta ?? 0),
-        ge3Delta:Number(p.ge3Delta ?? p.threePlusDelta ?? 0),
-        prizeDelta:Number(p.prizeDelta ?? p.prizeSetDelta ?? 0)
-      });
-    }
-    if(rows.length)return rows;
-  }
-  throw new Error("V3.3 serijos helperis nerastas. Paleisk V3.3 bent vieną kartą ir bandyk dar kartą.");
-}
-
-function v34rNormalize(rows){
-  return rows.map(r=>({
-    date:r.date || r.targetDate || r.drawDate || "",
-    meanHitDelta:Number(
-      r.meanHitDelta ?? r.avgHitDelta ?? r.avgDelta ?? r.meanDelta ?? r.deltaMain ?? r.delta ?? 0
-    ),
-    ge3Delta:Number(
-      r.ge3Delta ?? r.threePlusDelta ?? r.ge3MainDelta ?? r.delta3 ?? r.cat3Delta ?? 0
-    ),
-    prizeDelta:Number(
-      r.prizeDelta ?? r.prizeSetDelta ?? r.prizeRateDelta ?? r.deltaPrize ?? r.prizeDeltaPp ?? 0
-    )
-  })).filter(r=>Number.isFinite(r.meanHitDelta)&&Number.isFinite(r.ge3Delta)&&Number.isFinite(r.prizeDelta));
-}
-
-function v34rBlockStats(rows,blockSize){
-  const out=[];
-  for(let i=0;i+blockSize<=rows.length;i+=blockSize){
-    const b=rows.slice(i,i+blockSize);
-    const a=v34rMean(b.map(x=>x.meanHitDelta));
-    const c=v34rMean(b.map(x=>x.ge3Delta));
-    const p=v34rMean(b.map(x=>x.prizeDelta));
-    out.push({
-      start:b[0].date,end:b[b.length-1].date,n:b.length,
-      meanHitDelta:a,ge3Delta:c,prizeDelta:p,
-      positive:[a>0,c>0,p>0].filter(Boolean).length
-    });
-  }
-  return out;
-}
-
-function v34rPermutation(rows,iters=10000){
-  const rng=v34rRng(340034);
-  const obs={
-    mean:v34rMean(rows.map(r=>r.meanHitDelta)),
-    ge3:v34rMean(rows.map(r=>r.ge3Delta)),
-    prize:v34rMean(rows.map(r=>r.prizeDelta))
-  };
-
-  /*
-    Sign-flip placebo: under no persistent edge, positive/negative orientation across
-    per-draw OMEGA-vs-Random deltas is exchangeable. This preserves magnitudes and
-    dependence structure better than generating arbitrary lottery outcomes here.
-  */
-  let geMean=0,ge3=0,gePrize=0,geAll=0;
-  for(let t=0;t<iters;t++){
-    let sm=0,s3=0,sp=0;
-    for(const r of rows){
-      const sign=rng()<0.5?-1:1;
-      sm += sign*r.meanHitDelta;
-      s3 += sign*r.ge3Delta;
-      sp += sign*r.prizeDelta;
-    }
-    sm/=rows.length;s3/=rows.length;sp/=rows.length;
-    if(sm>=obs.mean)geMean++;
-    if(s3>=obs.ge3)ge3++;
-    if(sp>=obs.prize)gePrize++;
-    if(sm>=obs.mean && s3>=obs.ge3 && sp>=obs.prize)geAll++;
-  }
-  return {
-    obs,
-    pMean:(geMean+1)/(iters+1),
-    pGe3:(ge3+1)/(iters+1),
-    pPrize:(gePrize+1)/(iters+1),
-    pAll:(geAll+1)/(iters+1)
-  };
-}
-
-function v34rRenderTable(title,blocks){
-  return `<h3>${title}</h3><table style="width:100%">
-    <thead><tr><th>#</th><th>Laikotarpis</th><th>N</th><th>Vid. pagr. Δ</th><th>≥3 pagr. Δ</th><th>Prizinis Δ</th><th>Teigiami</th></tr></thead>
-    <tbody>${blocks.map((b,i)=>`<tr>
-      <td>${i+1}</td><td>${b.start} → ${b.end}</td><td>${b.n}</td>
-      <td>${b.meanHitDelta>=0?"+":""}${v34rFmt(b.meanHitDelta)}</td>
-      <td>${b.ge3Delta>=0?"+":""}${v34rFmt(b.ge3Delta,2)}</td>
-      <td>${b.prizeDelta>=0?"+":""}${v34rFmt(b.prizeDelta,2)}</td>
-      <td>${b.positive}/3</td>
-    </tr>`).join("")}</tbody></table>`;
-}
-
-async function runV34ResearchConfirmation(){
-  const btn=document.getElementById("runV34ResearchBtn"),
-        st=document.getElementById("v34ResearchStatus"),
-        sum=document.getElementById("v34ResearchSummary"),
-        b10=document.getElementById("v34ResearchBlocks10"),
-        b20=document.getElementById("v34ResearchBlocks20"),
-        fin=document.getElementById("v34ResearchFinal");
-  try{
-    btn.disabled=true;
-    st.textContent="Ruošiama V3.3 walk-forward serija…";
-    await new Promise(r=>setTimeout(r,20));
-
-    let rows=v34rNormalize(v34rGetSeries());
-    if(rows.length<100) throw new Error("V3.4 reikia bent 100 walk-forward taškų.");
-
-    // Frozen confirmatory tail = newest 100 rows.
-    rows=rows.slice(-100);
-
-    st.textContent="Skaičiuojami 10×10 ir 5×20 nepriklausomi blokai…";
-    await new Promise(r=>setTimeout(r,20));
-
-    const blocks10=v34rBlockStats(rows,10);
-    const blocks20=v34rBlockStats(rows,20);
-    const perm=v34rPermutation(rows,10000);
-
-    const pos10=blocks10.filter(x=>x.positive>=2).length;
-    const all10=blocks10.filter(x=>x.positive===3).length;
-    const pos20=blocks20.filter(x=>x.positive>=2).length;
-    const all20=blocks20.filter(x=>x.positive===3).length;
-
-    sum.innerHTML=`<b>Confirmatory tail:</b> ${rows[0].date} → ${rows.at(-1).date} • 100 walk-forward taškų.<br>
-      <b>Frozen pjūviai:</b> 10 × 10 ir 5 × 20.<br>
-      <b>Placebo:</b> 10 000 sign-flip permutation bandymų.`;
-
-    b10.innerHTML=v34rRenderTable("10 × 10 nepersidengiantys blokai",blocks10);
-    b20.innerHTML=v34rRenderTable("5 × 20 nepersidengiantys blokai",blocks20);
-
-    /*
-      Strict predeclared gate:
-      - at least 7/10 blocks positive on >=2 criteria
-      - at least 3/5 blocks positive on >=2 criteria
-      - newest 3 blocks in 10×10 must all be >=2/3 positive
-      - placebo joint p < .05
-      - prize component alone p < .05 because V3.3's newest signal was strongest there
-    */
-    const newest3ok=blocks10.slice(-3).every(x=>x.positive>=2);
-    let verdict="FAIL",color="#ff8080";
-    if(pos10>=7 && pos20>=3 && newest3ok && perm.pAll<0.05 && perm.pPrize<0.05){
-      verdict="PASS";color="#69e6b8";
-    }else if(pos10>=6 && pos20>=3 && newest3ok){
-      verdict="INCONCLUSIVE";color="#ffcf66";
-    }
-
-    fin.innerHTML=`<b>V3.4 Confirmation verdiktas:
-      <span style="color:${color}">${verdict}</span></b><br>
-      10×10: bent 2/3 kriterijų teigiami <b>${pos10}/10</b>, visi 3 teigiami <b>${all10}/10</b>.<br>
-      5×20: bent 2/3 kriterijų teigiami <b>${pos20}/5</b>, visi 3 teigiami <b>${all20}/5</b>.<br>
-      Naujausi 3 nepriklausomi 10-tiražų blokai: <b>${newest3ok?"PASS":"FAIL"}</b>.<br>
-      Placebo p: vid. pagr. <b>${v34rFmt(perm.pMean,4)}</b> • ≥3 pagr. <b>${v34rFmt(perm.pGe3,4)}</b> • prizinis <b>${v34rFmt(perm.pPrize,4)}</b> • joint <b>${v34rFmt(perm.pAll,4)}</b>.<br>
-      <small>PASS reikalauja chronologinio stabilumo abiem nepersidengiančiais pjūviais ir placebo joint + prize p &lt; 0.05.
-      Šis modulis nekeičia V3.3 taisyklių ir neperrenka slenkančių langų po rezultato.</small>`;
-
-    localStorage.setItem("omegaV34ResearchConfirmation",JSON.stringify({
-      at:new Date().toISOString(),from:rows[0].date,through:rows.at(-1).date,
-      pos10,all10,pos20,all20,newest3ok,perm,verdict
-    }));
-    st.textContent="V3.4 Confirmation Test baigtas.";
-  }catch(e){
-    st.innerHTML="<b>Klaida:</b> "+(typeof qesc==="function"?qesc(e.message||e):(e.message||e));
-  }finally{
-    btn.disabled=false;
-  }
 }
 </script>
 
