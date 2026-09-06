@@ -383,7 +383,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
 
 <section class="card c12" id="seq14ReplayCard">
-  <h2>OMEGA Sequence Lab 1.4 — Historical Regime Replay</h2>
+  <h2>OMEGA Sequence Lab 1.4.1 — Historical Regime Replay (Bugfix)</h2>
   <p>
     Šis etapas atsako į konkretų klausimą: <b>kai istorijoje atsirasdavo būsena,
     panaši į dabartinę 6/6 teigiamų langų būseną, kas nutikdavo po jos?</b>
@@ -399,6 +399,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
     <button class="btn green" id="seq14RunBtn" onclick="seq14Run()">Paleisti Historical Regime Replay</button>
   </div>
   <div id="seq14Status" class="status">Dar nepaleista.</div>
+  <div class="notice" style="margin-top:10px"><b>1.4.1:</b> pataisyta tik permutation testo techninė klaida su persidengiančiais future horizontais. Triggeris, Frozen Consensus, 12/24/36 horizontai ir visi vertinimo kriterijai nepakeisti.</div>
   <div id="seq14Summary" class="report" style="margin-top:14px"></div>
   <div id="seq14Episodes" class="scroll" style="margin-top:14px"></div>
   <div id="seq14Forward" class="scroll" style="margin-top:14px"></div>
@@ -3224,31 +3225,45 @@ function s14MonteCarlo(rows,iters,seed){
 function s14PermuteFuture(data,pred,episodes,h,iters,seed){
   const usable=episodes.filter(e=>e.anchor+h<=data.length);
   if(!usable.length)return {p:NaN};
-  const rng=s14rng(seed);
-  let obs=0,n=0;
-  const pool=[];
+
+  // Vienas įrašas kiekvienam faktiškai vertinamam future prediction taškui.
+  // Tai svarbu, nes skirtingų regime epizodų 12/24/36 horizontai gali persidengti.
+  const observations=[];
   for(const e of usable){
     for(let i=e.anchor;i<e.anchor+h;i++){
-      obs += pred[i].filter(x=>(data[i].euro||[]).includes(x)).length;
-      n++;
-      pool.push(data[i].euro||[]);
+      if(!pred[i] || !Array.isArray(data[i].euro)) continue;
+      observations.push({
+        prediction:[...pred[i]],
+        actual:[...data[i].euro]
+      });
     }
   }
+  if(!observations.length)return {p:NaN};
+
+  const rng=s14rng(seed);
+  const obs=observations.reduce(
+    (s,o)=>s+o.prediction.filter(x=>o.actual.includes(x)).length,0
+  );
+
+  const actualPool=observations.map(o=>o.actual);
   let ge=0;
+
   for(let t=0;t<iters;t++){
-    const idx=[...pool.keys()];
+    const idx=[...actualPool.keys()];
     for(let i=idx.length-1;i>0;i--){
-      const j=Math.floor(rng()*(i+1));[idx[i],idx[j]]=[idx[j],idx[i]];
+      const j=Math.floor(rng()*(i+1));
+      [idx[i],idx[j]]=[idx[j],idx[i]];
     }
-    let k=0,tot=0;
-    for(const e of usable){
-      for(let i=e.anchor;i<e.anchor+h;i++){
-        tot+=pred[i].filter(x=>pool[idx[k++]].includes(x)).length;
-      }
+
+    let tot=0;
+    for(let i=0;i<observations.length;i++){
+      const shuffledActual=actualPool[idx[i]];
+      tot+=observations[i].prediction.filter(x=>shuffledActual.includes(x)).length;
     }
     if(tot>=obs)ge++;
   }
-  return {p:(ge+1)/(iters+1),obs,n};
+
+  return {p:(ge+1)/(iters+1),obs,n:observations.length};
 }
 function seq14Run(){
   const btn=document.getElementById('seq14RunBtn'),st=document.getElementById('seq14Status'),
