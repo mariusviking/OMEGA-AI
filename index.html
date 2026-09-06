@@ -315,7 +315,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 <section class="card c12" id="signalAuditCard"><h2>OMEGA Research 1.0 — Signal Audit</h2><p>Šis modulis <b>negeneruoja bilietų</b>. Jis chronologiškai tikrina, ar paprasti signalai kitame tiraže veikia geriau už vienodą atsitiktinį pasirinkimą.</p><div class="notice"><b>GO / NO-GO:</b> teigiamas rezultatas turi išlikti visame walk-forward teste, holdout periode ir bent 2 iš 3 chronologinių segmentų.</div><div class="toolbar" style="margin-top:14px"><button class="btn green" id="runSignalAuditBtn" onclick="runOmegaSignalAudit()">Paleisti Signal Audit</button></div><div id="signalAuditStatus" class="status">Dar nepaleista.</div><div id="signalAuditSummary" class="report" style="margin-top:14px"></div><div id="signalAuditResults" class="scroll" style="margin-top:14px"></div></section>
 
 <section class="card c12" id="sequenceLabCard">
-<h2>OMEGA Sequence Lab 1.0 — Next-Draw Pattern Engine</h2>
+<h2>OMEGA Sequence Lab 1.1 — Next-Draw Pattern Engine</h2>
 <p>Analizuoja tik vienodo formato erą nuo <b>2022-03-25</b> (5 iš 50 + 2 iš 12). Vietoje „karštų skaičių“ ieško istorinių būsenų, panašių į dabartinę, ir tikrina, kas iškrito <b>kitame</b> tiraže.</p>
 <div class="notice"><b>Anti-leakage:</b> walk-forward teste kiekvienas prognozuojamas tiražas mato tik ankstesnius tiražus. Rezultatas lyginamas su neutralia baze: MAIN 10% vienam skaičiui, EURO 16.67% vienam skaičiui.</div>
 <div class="toolbar" style="margin-top:14px"><button class="btn green" id="seqRunBtn" onclick="seqRun()">Paleisti Sequence Lab</button></div>
@@ -324,6 +324,29 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 <div id="seqNow" class="report" style="margin-top:14px"></div>
 <div id="seqTable" class="scroll" style="margin-top:14px"></div>
 </section>
+
+<section class="card c12" id="seqDeepValidationCard">
+  <h2>OMEGA Sequence Lab 1.1 — Deep Validation</h2>
+  <p>
+    Patvirtinimo etapas skirtas tik <b>EURO 1–12</b> signalams nuo 2022-03-25.
+    Čia taisyklės nebeoptimizuojamos: testuojami užšaldyti <b>frequency</b>,
+    <b>trend</b>, <b>hybrid</b> ir <b>sequence/analog</b> modeliai.
+  </p>
+  <div class="notice">
+    <b>Patvirtinimo logika:</b> kiekvienas tikslinis tiražas vertinamas tik iš ankstesnių tiražų.
+    Paskutinis 30% laikotarpis naudojamas kaip confirmatory tail. Kiekvienam modeliui atliekama
+    Monte Carlo random kontrolė, bootstrap 95% intervalas ir Holm korekcija dėl kelių testų.
+    Galutinis verdiktas: <b>PASS / INCONCLUSIVE / FAIL</b>.
+  </div>
+  <div class="toolbar" style="margin-top:14px">
+    <button class="btn green" id="seq11RunBtn" onclick="seq11Run()">Paleisti Deep Validation</button>
+  </div>
+  <div id="seq11Status" class="status">Dar nepaleista.</div>
+  <div id="seq11Summary" class="report" style="margin-top:14px"></div>
+  <div id="seq11Table" class="scroll" style="margin-top:14px"></div>
+  <div id="seq11Consensus" class="report" style="margin-top:14px"></div>
+</section>
+
 </main>
 
 <section class="card c12" id="recentRegimeCard">
@@ -2681,5 +2704,160 @@ function qwalk(data,key,maxN,picks){let rows=[],start=Math.max(90,Math.floor(dat
 function qpct(x){return (x*100).toFixed(1)+'%'}function qesc(x){return String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
 function seqRun(){let b=document.getElementById('seqRunBtn'),st=document.getElementById('seqStatus');try{b.disabled=true;st.textContent='Skaičiuojama: analogai → perėjimai → walk-forward…';let data=qera();if(data.length<120)throw Error('Per mažai 2022-03-25+ tiražų.');let M=qwalk(data,'numbers',50,5),E=qwalk(data,'euro',12,2),mh=qmodel(data,'numbers',50,5),eh=qmodel(data,'euro',12,2),mt=[...mh].sort((a,b)=>b[1]-a[1]).slice(0,15),et=[...eh].sort((a,b)=>b[1]-a[1]).slice(0,8);let mainPass=M.edge>0&&M.holdEdge>0&&M.pos>=2,euroPass=E.edge>0&&E.holdEdge>0&&E.pos>=2;document.getElementById('seqSummary').innerHTML=`<b>Istorija:</b> ${data[0].date} → ${data.at(-1).date} • ${data.length} tiražų.<br><b>MAIN walk-forward:</b> ${M.avg.toFixed(3)} vs random ${M.base.toFixed(3)} • edge ${M.edge>=0?'+':''}${M.edge.toFixed(3)} • holdout ${M.holdEdge>=0?'+':''}${M.holdEdge.toFixed(3)} • segmentai ${M.pos}/3 → <b>${mainPass?'CANDIDATE':'NO SIGNAL'}</b><br><b>EURO walk-forward:</b> ${E.avg.toFixed(3)} vs random ${E.base.toFixed(3)} • edge ${E.edge>=0?'+':''}${E.edge.toFixed(3)} • holdout ${E.holdEdge>=0?'+':''}${E.holdEdge.toFixed(3)} • segmentai ${E.pos}/3 → <b>${euroPass?'CANDIDATE':'NO SIGNAL'}</b>`;document.getElementById('seqNow').innerHTML=`<b>Dabartinės būsenos NEXT-DRAW probability map</b><br><small>Tai modelio reitingas, ne garantuota laimėjimo tikimybė. Neutrali bazė: MAIN 10%, EURO 16.67%.</small><br><br><b>MAIN TOP 15:</b><br>${mt.map(([n,p],i)=>`${i+1}. ${n} — ${qpct(p)}`).join(' • ')}<br><br><b>EURO TOP 8:</b><br>${et.map(([n,p],i)=>`${i+1}. ${n} — ${qpct(p)}`).join(' • ')}`;document.getElementById('seqTable').innerHTML=`<table style="width:100%"><thead><tr><th>Modelis</th><th>WF hit</th><th>Random</th><th>Edge</th><th>Holdout edge</th><th>Segmentai</th><th>Verdiktas</th></tr></thead><tbody><tr><td>MAIN sequence/analog</td><td>${M.avg.toFixed(3)}</td><td>${M.base.toFixed(3)}</td><td>${M.edge.toFixed(3)}</td><td>${M.holdEdge.toFixed(3)}</td><td>${M.pos}/3</td><td><b>${mainPass?'CANDIDATE':'NO SIGNAL'}</b></td></tr><tr><td>EURO sequence/analog</td><td>${E.avg.toFixed(3)}</td><td>${E.base.toFixed(3)}</td><td>${E.edge.toFixed(3)}</td><td>${E.holdEdge.toFixed(3)}</td><td>${E.pos}/3</td><td><b>${euroPass?'CANDIDATE':'NO SIGNAL'}</b></td></tr></tbody></table>`;localStorage.setItem('omegaSequenceLab10',JSON.stringify({at:new Date().toISOString(),through:data.at(-1).date,main:M,euro:E,mainMap:mt,euroMap:et}));st.textContent='Sequence Lab baigtas.'}catch(e){st.innerHTML='<b>Klaida:</b> '+qesc(e.message||e)}finally{b.disabled=false}}
 </script>
+
+<script>
+/* OMEGA Sequence Lab 1.1 — Deep Validation
+   Frozen EURO rules. No parameter search in this module. */
+function s11rng(seed){
+  let x=(seed>>>0)||123456789;
+  return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return ((x>>>0)/4294967296)}
+}
+function s11mean(a){return a.length?a.reduce((s,x)=>s+x,0)/a.length:0}
+function s11quantile(a,p){
+  if(!a.length)return NaN; let b=[...a].sort((x,y)=>x-y),i=(b.length-1)*p,l=Math.floor(i),h=Math.ceil(i);
+  return l===h?b[l]:b[l]+(b[h]-b[l])*(i-l);
+}
+function s11choose2(rng){
+  let a=1+Math.floor(rng()*12),b=a;
+  while(b===a)b=1+Math.floor(rng()*12);
+  return a<b?[a,b]:[b,a];
+}
+function s11rankMap(m){
+  let z=[...m.entries()].sort((a,b)=>b[1]-a[1]||a[0]-b[0]),r=new Map();
+  z.forEach((x,i)=>r.set(x[0],12-i));
+  return r;
+}
+function s11Top2(m){return [...m.entries()].sort((a,b)=>b[1]-a[1]||a[0]-b[0]).slice(0,2).map(x=>x[0])}
+function s11EuroFrequency(hist){
+  return osaScores(hist,'frequency',12,'euro');
+}
+function s11EuroTrend(hist){
+  return osaScores(hist,'trend',12,'euro');
+}
+function s11EuroHybrid(hist){
+  return osaScores(hist,'hybrid',12,'euro');
+}
+function s11EuroSequence(hist){
+  return qmodel(hist,'euro',12,2);
+}
+function s11Consensus(hist){
+  const models=[s11EuroFrequency(hist),s11EuroTrend(hist),s11EuroHybrid(hist),s11EuroSequence(hist)];
+  const score=new Map(); for(let n=1;n<=12;n++)score.set(n,0);
+  models.forEach(m=>{const r=s11rankMap(m);for(let n=1;n<=12;n++)score.set(n,score.get(n)+(r.get(n)||0));});
+  return score;
+}
+function s11Rows(data,fn,start){
+  const rows=[];
+  for(let i=start;i<data.length;i++){
+    const hist=data.slice(0,i),top=s11Top2(fn(hist)),actual=data[i].euro||[];
+    rows.push({date:data[i].date,top,hit:top.filter(n=>actual.includes(n)).length,actual:[...actual]});
+  }
+  return rows;
+}
+function s11MonteCarlo(rows,iters,seed){
+  const rng=s11rng(seed),obs=rows.reduce((s,r)=>s+r.hit,0),sims=[];
+  for(let t=0;t<iters;t++){
+    let tot=0;
+    for(const r of rows){const p=s11choose2(rng);tot+=p.filter(n=>r.actual.includes(n)).length}
+    sims.push(tot);
+  }
+  const ge=sims.filter(x=>x>=obs).length;
+  return {obs,p:(ge+1)/(iters+1),nullMean:s11mean(sims),q95:s11quantile(sims,.95),q99:s11quantile(sims,.99)};
+}
+function s11Bootstrap(rows,iters,seed){
+  const rng=s11rng(seed),base=1/3,edges=[];
+  for(let t=0;t<iters;t++){
+    let s=0;
+    for(let j=0;j<rows.length;j++)s+=rows[Math.floor(rng()*rows.length)].hit;
+    edges.push(s/rows.length-base);
+  }
+  return {lo:s11quantile(edges,.025),hi:s11quantile(edges,.975)};
+}
+function s11Holm(items){
+  const z=items.map((x,i)=>({i,p:x.p})).sort((a,b)=>a.p-b.p),m=z.length,adj=Array(m).fill(1);
+  let prev=0;
+  z.forEach((x,k)=>{let v=Math.min(1,(m-k)*x.p);v=Math.max(prev,v);prev=v;adj[x.i]=v});
+  return adj;
+}
+function s11Eval(name,rows,seed){
+  const base=1/3,avg=s11mean(rows.map(r=>r.hit)),edge=avg-base;
+  const mc=s11MonteCarlo(rows,20000,seed),boot=s11Bootstrap(rows,6000,seed+991);
+  const n=rows.length,seg=[0,1,2].map(j=>{
+    const a=Math.floor(n*j/3),b=Math.floor(n*(j+1)/3);
+    return s11mean(rows.slice(a,b).map(r=>r.hit))-base
+  });
+  return {name,n,avg,base,edge,mc,boot,seg,pos:seg.filter(x=>x>0).length,p:mc.p,rows};
+}
+function s11Fmt(x,d=3){return Number.isFinite(x)?x.toFixed(d):'—'}
+function s11Pct(x){return (x*100).toFixed(1)+'%'}
+function s11Verdict(r){
+  const pass=r.edge>0 && r.boot.lo>0 && r.pAdj<0.05 && r.pos>=2;
+  const fail=r.edge<=0 || r.boot.hi<=0;
+  return pass?'PASS':(fail?'FAIL':'INCONCLUSIVE');
+}
+function seq11Run(){
+  const btn=document.getElementById('seq11RunBtn'),st=document.getElementById('seq11Status'),
+        sum=document.getElementById('seq11Summary'),tbl=document.getElementById('seq11Table'),
+        con=document.getElementById('seq11Consensus');
+  try{
+    btn.disabled=true;st.textContent='Deep Validation: frozen walk-forward → Monte Carlo → bootstrap → Holm…';
+    const data=qera();
+    if(data.length<180)throw Error('Reikia bent 180 vienodo EURO 1–12 režimo tiražų.');
+    const start=Math.max(100,Math.floor(data.length*.35));
+    const allTargets=data.length-start;
+    const confirmStart=start+Math.floor(allTargets*.70);
+    const defs=[
+      ['EURO frequency',s11EuroFrequency,1101],
+      ['EURO trend',s11EuroTrend,2202],
+      ['EURO hybrid',s11EuroHybrid,3303],
+      ['EURO sequence/analog',s11EuroSequence,4404]
+    ];
+    const dev=[],conf=[];
+    for(const [name,fn,seed] of defs){
+      dev.push(s11Eval(name,s11Rows(data,fn,start),seed));
+      conf.push(s11Eval(name,s11Rows(data,fn,confirmStart),seed+77));
+    }
+    const adj=s11Holm(conf);
+    conf.forEach((r,i)=>r.pAdj=adj[i]);
+    const passes=conf.filter(r=>s11Verdict(r)==='PASS');
+
+    sum.innerHTML=`<b>Istorija:</b> ${data[0].date} → ${data.at(-1).date} • ${data.length} tiražų.<br>
+      <b>Frozen modeliai:</b> 4. Confirmatory tail: ${data[confirmStart].date} → ${data.at(-1).date} • ${data.length-confirmStart} tiražų.<br>
+      <b>Galutinis rezultatas:</b> ${passes.length?'<span style="color:#69e6b8">'+passes.length+'/4 modelių PASS</span>':'<span style="color:#ffcf66">0/4 PASS — patikimas EURO signalas nepatvirtintas</span>'}.`;
+
+    tbl.innerHTML=`<table style="width:100%">
+      <thead><tr><th>Modelis</th><th>Confirm hit</th><th>Random</th><th>Edge</th><th>95% CI edge</th><th>MC p</th><th>Holm p</th><th>Segmentai</th><th>Verdiktas</th></tr></thead>
+      <tbody>${conf.map(r=>{
+        const v=s11Verdict(r);
+        return `<tr><td>${r.name}</td><td>${s11Fmt(r.avg)}</td><td>0.333</td>
+          <td>${r.edge>=0?'+':''}${s11Fmt(r.edge)}</td>
+          <td>[${r.boot.lo>=0?'+':''}${s11Fmt(r.boot.lo)}, ${r.boot.hi>=0?'+':''}${s11Fmt(r.boot.hi)}]</td>
+          <td>${s11Fmt(r.p,4)}</td><td>${s11Fmt(r.pAdj,4)}</td><td>${r.pos}/3</td>
+          <td><b style="color:${v==='PASS'?'#69e6b8':v==='FAIL'?'#ff8080':'#ffcf66'}">${v}</b></td></tr>`
+      }).join('')}</tbody></table>
+      <div class="notice" style="margin-top:14px">
+        <b>PASS kriterijai:</b> teigiamas edge, bootstrap 95% intervalo apatinė riba &gt; 0,
+        Holm-koreguotas Monte Carlo p &lt; 0.05 ir bent 2/3 teigiami segmentai.
+        Jei bent viena sąlyga neįvykdyta, signalas nepriimamas kaip patvirtintas.
+      </div>`;
+
+    const cRows=s11Rows(data,s11Consensus,confirmStart),c=s11Eval('EURO 4-model consensus',cRows,7777);
+    con.innerHTML=`<b>Antrinis consensus testas (neįtrauktas į 4 frozen modelių PASS skaičių):</b><br>
+      Hit ${s11Fmt(c.avg)} vs random 0.333 • edge ${c.edge>=0?'+':''}${s11Fmt(c.edge)} •
+      95% CI [${c.boot.lo>=0?'+':''}${s11Fmt(c.boot.lo)}, ${c.boot.hi>=0?'+':''}${s11Fmt(c.boot.hi)}] •
+      Monte Carlo p ${s11Fmt(c.p,4)} • segmentai ${c.pos}/3.<br>
+      <small>Consensus rodomas kaip papildoma diagnostika; juo negalima pakeisti iš anksto užšaldytų keturių modelių, jei jų patvirtinimas nepraeina.</small>`;
+
+    localStorage.setItem('omegaSequenceLab11',JSON.stringify({
+      at:new Date().toISOString(),through:data.at(-1).date,confirmFrom:data[confirmStart].date,
+      development:dev.map(({rows,...x})=>x),confirmatory:conf.map(({rows,...x})=>x),
+      consensus:{...c,rows:undefined}
+    }));
+    st.textContent='Deep Validation baigtas.';
+  }catch(e){st.innerHTML='<b>Klaida:</b> '+qesc(e.message||e)}
+  finally{btn.disabled=false}
+}
+</script>
+
 </body>
 </html>
