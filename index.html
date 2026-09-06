@@ -430,7 +430,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
 
 <section class="card c12" id="seq20PatternDiscoveryCard">
-  <h2>OMEGA Sequence Lab 2.0 — Pattern Discovery Engine</h2>
+  <h2>OMEGA Sequence Lab 2.0.1 — Pattern Discovery Engine</h2>
   <p>
     Šis modulis nebeieško vien iš anksto pasirinkto 6/6 režimo. Jis kiekvienam istoriniam
     tiražo taškui sukuria <b>būsenos piršto atspaudą</b>, suranda panašiausias ankstesnes būsenas
@@ -445,6 +445,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
     <button class="btn green" id="seq20RunBtn" onclick="seq20Run()">Paleisti Pattern Discovery Engine</button>
   </div>
   <div id="seq20Status" class="status">Dar nepaleista.</div>
+  <div class="notice" style="margin-top:10px"><b>2.0.1:</b> pataisyta walk-forward validacijos laukų neatitiktis <b>numbers/euro ↔ nextMain/nextEuro</b>. Analogų paieška, leakage kontrolė, K=24, TOP pasirinkimas ir validacijos kriterijai nepakeisti.</div>
   <div id="seq20Summary" class="report" style="margin-top:14px"></div>
   <div id="seq20Analogs" class="scroll" style="margin-top:14px"></div>
   <div id="seq20Map" class="report" style="margin-top:14px"></div>
@@ -3546,7 +3547,7 @@ function seq15Run(){
 
 
 <script>
-/* OMEGA Sequence Lab 2.0 — Pattern Discovery Engine
+/* OMEGA Sequence Lab 2.0.1 — Pattern Discovery Engine
    Historical-state fingerprint + nearest analog next-draw replay.
    No future leakage in walk-forward validation. */
 
@@ -3668,11 +3669,16 @@ function s20Analogs(data,targetIndex,k,minTrain){
 function s20WeightedMap(analogs,key,maxN){
   const m=new Map();for(let n=1;n<=maxN;n++)m.set(n,0);
   if(!analogs.length)return m;
+  // 2.0.1 bugfix: walk-forward naudoja draw laukus "numbers"/"euro",
+  // o analogų objektai juos saugo kaip "nextMain"/"nextEuro".
+  // Normalizuojame abu variantus vienoje vietoje, kad a[key] niekada nebūtų undefined.
+  const analogKey=key==="numbers"?"nextMain":key==="euro"?"nextEuro":key;
   const weights=analogs.map(a=>1/(0.02+a.distance));
   const sw=weights.reduce((s,x)=>s+x,0)||1;
   analogs.forEach((a,i)=>{
     const w=weights[i]/sw;
-    for(const n of a[key])m.set(n,m.get(n)+w);
+    const values=Array.isArray(a[analogKey])?a[analogKey]:[];
+    for(const n of values)if(m.has(n))m.set(n,m.get(n)+w);
   });
   return m;
 }
