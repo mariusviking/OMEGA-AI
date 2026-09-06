@@ -430,7 +430,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
 
 <section class="card c12" id="seq20PatternDiscoveryCard">
-  <h2>OMEGA Sequence Lab 2.1 — Pattern Discovery Engine</h2>
+  <h2>OMEGA Sequence Lab 2.1.1 — Pattern Discovery Engine</h2>
   <p>
     Šis modulis nebeieško vien iš anksto pasirinkto 6/6 režimo. Jis kiekvienam istoriniam
     tiražo taškui sukuria <b>būsenos piršto atspaudą</b>, suranda panašiausias ankstesnes būsenas
@@ -455,7 +455,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 
 
 <section class="card c12" id="seq21MultiHorizonCard">
-  <h2>OMEGA Sequence Lab 2.1 — Multi-Horizon Pattern Test</h2>
+  <h2>OMEGA Sequence Lab 2.1.1 — Multi-Horizon Pattern Test</h2>
   <p>
     Šis etapas tikrina ne tik kitą tiražą. Naudojamas tas pats užšaldytas Pattern Discovery
     metodas ir leakage-safe chronologija, bet tikrinama, ar po panašios būsenos atsiranda
@@ -3811,159 +3811,114 @@ function seq20Run(){
 
 
 <script>
-/* OMEGA Sequence Lab 2.1 — Multi-Horizon Pattern Test
-   Same frozen Pattern Discovery engine. Tests 1/5/10/20/30 future draws. */
+/* OMEGA Sequence Lab 2.1.1 — optimized Multi-Horizon Pattern Test.
+   Fix: iPhone hang. Fingerprints/predictions are cached once and reused for all horizons.
+   Random-control p uses the exact single-draw overlap variance + normal tail approximation,
+   avoiding tens of millions of JS Set operations. */
 function s21mean(a){return a.length?a.reduce((s,x)=>s+x,0)/a.length:0}
-function s21q(a,p){
-  if(!a.length)return NaN;
-  const b=[...a].sort((x,y)=>x-y),i=(b.length-1)*p,l=Math.floor(i),h=Math.ceil(i);
-  return l===h?b[l]:b[l]+(b[h]-b[l])*(i-l);
+function s21q(a,p){if(!a.length)return NaN;const b=[...a].sort((x,y)=>x-y),i=(b.length-1)*p,l=Math.floor(i),h=Math.ceil(i);return l===h?b[l]:b[l]+(b[h]-b[l])*(i-l)}
+function s21rng(seed){let x=(seed>>>0)||1122334455;return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return((x>>>0)/4294967296)}}
+function s21erfc(x){
+  const z=Math.abs(x),t=1/(1+0.5*z);
+  const r=t*Math.exp(-z*z-1.26551223+t*(1.00002368+t*(0.37409196+t*(0.09678418+t*(-0.18628806+t*(0.27886807+t*(-1.13520398+t*(1.48851587+t*(-0.82215223+t*0.17087277)))))))));
+  return x>=0?r:2-r;
 }
-function s21rng(seed){
-  let x=(seed>>>0)||1122334455;
-  return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return ((x>>>0)/4294967296)}
+function s21normalUpper(z){return .5*s21erfc(z/Math.sqrt(2))}
+function s21BuildCache(data,minTrain,startIndex,k){
+  const fps=new Array(data.length+1);
+  for(let i=minTrain;i<=data.length;i++)fps[i]=s20fingerprint(data.slice(0,i));
+  const predMain=new Array(data.length),predEuro=new Array(data.length);
+  for(let i=startIndex;i<data.length;i++){
+    const tf=fps[i], rows=[];
+    for(let j=minTrain;j<i-1;j++){
+      rows.push({stateIndex:j,stateDate:data[j-1].date,nextDate:data[j].date,
+        distance:s20distance(tf,fps[j]),nextMain:data[j].numbers,nextEuro:data[j].euro});
+    }
+    rows.sort((a,b)=>a.distance-b.distance);
+    const a=rows.slice(0,k);
+    if(a.length<Math.min(10,k))continue;
+    predMain[i]=s20Top(s20WeightedMap(a,"nextMain",50),5).map(x=>x[0]);
+    predEuro[i]=s20Top(s20WeightedMap(a,"nextEuro",12),2).map(x=>x[0]);
+  }
+  return {predMain,predEuro};
 }
-function s21PredAt(data,i,key,maxN,picks,k,minTrain){
-  const analogs=s20Analogs(data,i,k,minTrain);
-  if(analogs.length<Math.min(10,k))return null;
-  const mapKey=key==="numbers"?"nextMain":"nextEuro";
-  const map=s20WeightedMap(analogs,mapKey,maxN);
-  return s20Top(map,picks).map(x=>x[0]);
-}
-function s21Rows(data,key,maxN,picks,k,minTrain,startIndex,h){
+function s21RowsCached(data,preds,key,startIndex,h){
   const rows=[];
   for(let i=startIndex;i+h<=data.length;i++){
-    const top=s21PredAt(data,i,key,maxN,picks,k,minTrain);
-    if(!top)continue;
+    const top=preds[i]; if(!top)continue;
     let total=0;
-    for(let j=i;j<i+h;j++){
-      const actual=data[j][key]||[];
-      total += top.filter(n=>actual.includes(n)).length;
-    }
-    rows.push({
-      date:data[i].date,
-      top,
-      total,
-      avgPerDraw:total/h,
-      h
-    });
+    for(let j=i;j<i+h;j++){const actual=data[j][key]||[];for(const n of top)if(actual.includes(n))total++}
+    rows.push({date:data[i].date,total,avgPerDraw:total/h,h});
   }
   return rows;
 }
-function s21Stats(rows,base,seed,maxN){
+function s21Stats(rows,base,seed,N,K,nPick){
   if(!rows.length)return {n:0,avg:NaN,edge:NaN,holdEdge:NaN,pos:0,ci:{lo:NaN,hi:NaN},p:NaN};
   const avg=s21mean(rows.map(r=>r.avgPerDraw)),edge=avg-base,n=rows.length;
-  const hold=rows.slice(Math.floor(n*.8));
-  const holdEdge=s21mean(hold.map(r=>r.avgPerDraw))-base;
-  const seg=[0,1,2].map(j=>{
-    const a=Math.floor(n*j/3),b=Math.floor(n*(j+1)/3);
-    return s21mean(rows.slice(a,b).map(r=>r.avgPerDraw))-base;
-  });
+  const hold=rows.slice(Math.floor(n*.8)),holdEdge=s21mean(hold.map(r=>r.avgPerDraw))-base;
+  const seg=[0,1,2].map(j=>{const a=Math.floor(n*j/3),b=Math.floor(n*(j+1)/3);return s21mean(rows.slice(a,b).map(r=>r.avgPerDraw))-base});
   const pos=seg.filter(x=>x>0).length;
 
   const rng=s21rng(seed),boots=[];
-  for(let t=0;t<5000;t++){
-    let s=0;
-    for(let j=0;j<n;j++)s+=rows[Math.floor(rng()*n)].avgPerDraw;
-    boots.push(s/n-base);
-  }
+  for(let t=0;t<2500;t++){let s=0;for(let j=0;j<n;j++)s+=rows[Math.floor(rng()*n)].avgPerDraw;boots.push(s/n-base)}
   const ci={lo:s21q(boots,.025),hi:s21q(boots,.975)};
 
-  // Random-control simulation on the same number of target windows.
-  let ge=0;
-  const obs=rows.reduce((s,r)=>s+r.total,0);
-  for(let t=0;t<10000;t++){
-    let tot=0;
-    for(const r of rows){
-      for(let d=0;d<r.h;d++){
-        if(maxN===50){
-          // Expected random overlap is 0.5 per draw for 5-of-50 prediction vs 5-of-50 outcome.
-          // Simulate actual random combinations.
-          const pred=new Set();
-          while(pred.size<5)pred.add(1+Math.floor(rng()*50));
-          const act=new Set();
-          while(act.size<5)act.add(1+Math.floor(rng()*50));
-          pred.forEach(x=>{if(act.has(x))tot++});
-        }else{
-          const pred=new Set();
-          while(pred.size<2)pred.add(1+Math.floor(rng()*12));
-          const act=new Set();
-          while(act.size<2)act.add(1+Math.floor(rng()*12));
-          pred.forEach(x=>{if(act.has(x))tot++});
-        }
-      }
-    }
-    if(tot>=obs)ge++;
-  }
-  const p=(ge+1)/10001;
+  // Hypergeometric random overlap per draw: X ~ Hypergeom(N,K,nPick).
+  // Use effective non-overlapping draw count for a conservative fast random-control tail.
+  const h=rows[0].h, draws=Math.max(h, Math.floor(n/h)*h);
+  const varOne=nPick*(K/N)*(1-K/N)*((N-nPick)/(N-1));
+  const se=Math.sqrt(varOne/Math.max(1,draws));
+  const z=se>0?edge/se:0;
+  const p=edge<=0?1:s21normalUpper(z);
   return {n,avg,edge,holdEdge,seg,pos,ci,p};
 }
 function s21fmt(x,d=3){return Number.isFinite(x)?x.toFixed(d):"—"}
-
-function seq21Run(){
+async function seq21Run(){
   const btn=document.getElementById("seq21RunBtn"),st=document.getElementById("seq21Status"),
         sum=document.getElementById("seq21Summary"),mainBox=document.getElementById("seq21Main"),
         euroBox=document.getElementById("seq21Euro"),fin=document.getElementById("seq21Final");
   try{
-    btn.disabled=true;
-    st.textContent="Multi-Horizon: leakage-safe walk-forward per 1/5/10/20/30 tiražų horizontus…";
+    btn.disabled=true; st.textContent="Ruošiama istorija…";
+    await new Promise(r=>setTimeout(r,20));
     const data=qera();
     if(data.length<250)throw Error("Multi-Horizon testui reikia bent 250 vienodo EURO 1–12 režimo tiražų.");
+    const minTrain=120,k=24,startIndex=Math.max(minTrain+30,Math.floor(data.length*.35)),horizons=[1,5,10,20,30];
 
-    const minTrain=120,k=24,startIndex=Math.max(minTrain+30,Math.floor(data.length*.35));
-    const horizons=[1,5,10,20,30];
+    st.textContent="Skaičiuojami ir talpinami fingerprint'ai bei analogų prognozės…";
+    await new Promise(r=>setTimeout(r,20));
+    const cache=s21BuildCache(data,minTrain,startIndex,k);
 
-    const main=horizons.map((h,idx)=>{
-      const rows=s21Rows(data,"numbers",50,5,k,minTrain,startIndex,h);
-      return {h,...s21Stats(rows,.5,41000+h,50)};
-    });
-    const euro=horizons.map((h,idx)=>{
-      const rows=s21Rows(data,"euro",12,2,k,minTrain,startIndex,h);
-      return {h,...s21Stats(rows,1/3,51000+h,12)};
-    });
+    st.textContent="Tikrinami 1 / 5 / 10 / 20 / 30 tiražų horizontai…";
+    await new Promise(r=>setTimeout(r,20));
+    const main=horizons.map(h=>({h,...s21Stats(s21RowsCached(data,cache.predMain,"numbers",startIndex,h),.5,41000+h,50,5,5)}));
+    const euro=horizons.map(h=>({h,...s21Stats(s21RowsCached(data,cache.predEuro,"euro",startIndex,h),1/3,51000+h,12,2,2)}));
 
     sum.innerHTML=`<b>Istorija:</b> ${data[0].date} → ${data.at(-1).date} • ${data.length} tiražų.<br>
       <b>Frozen Pattern Discovery:</b> K=${k}, tas pats fingerprint ir distance metodas kaip 2.0.1.<br>
+      <b>2.1.1 optimizacija:</b> kiekvieno taško prognozė apskaičiuojama tik vieną kartą ir naudojama visuose horizontuose.<br>
       <b>Horizontai:</b> ${horizons.join(", ")} tiražų.`;
 
-    const table=(title,arr,base)=>`<h3>${title}</h3><table style="width:100%">
-      <thead><tr><th>Horizontas</th><th>N</th><th>Hit / draw</th><th>Random</th><th>Edge</th><th>Holdout edge</th><th>95% CI</th><th>MC p</th><th>Segmentai</th></tr></thead>
-      <tbody>${arr.map(r=>`<tr>
-        <td>${r.h}</td><td>${r.n}</td><td>${s21fmt(r.avg)}</td><td>${base.toFixed(3)}</td>
-        <td>${r.edge>=0?"+":""}${s21fmt(r.edge)}</td>
-        <td>${r.holdEdge>=0?"+":""}${s21fmt(r.holdEdge)}</td>
-        <td>[${r.ci.lo>=0?"+":""}${s21fmt(r.ci.lo)}, ${r.ci.hi>=0?"+":""}${s21fmt(r.ci.hi)}]</td>
-        <td>${s21fmt(r.p,4)}</td><td>${r.pos}/3</td>
-      </tr>`).join("")}</tbody></table>`;
-
+    const table=(title,arr,base)=>`<h3>${title}</h3><table style="width:100%"><thead><tr>
+      <th>Horizontas</th><th>N</th><th>Hit / draw</th><th>Random</th><th>Edge</th><th>Holdout edge</th><th>95% CI</th><th>Random p*</th><th>Segmentai</th>
+      </tr></thead><tbody>${arr.map(r=>`<tr><td>${r.h}</td><td>${r.n}</td><td>${s21fmt(r.avg)}</td><td>${base.toFixed(3)}</td>
+      <td>${r.edge>=0?"+":""}${s21fmt(r.edge)}</td><td>${r.holdEdge>=0?"+":""}${s21fmt(r.holdEdge)}</td>
+      <td>[${r.ci.lo>=0?"+":""}${s21fmt(r.ci.lo)}, ${r.ci.hi>=0?"+":""}${s21fmt(r.ci.hi)}]</td>
+      <td>${s21fmt(r.p,4)}</td><td>${r.pos}/3</td></tr>`).join("")}</tbody></table>`;
     mainBox.innerHTML=table("MAIN 1–50 multi-horizon",main,.5);
     euroBox.innerHTML=table("EURO 1–12 multi-horizon",euro,1/3);
 
-    const pass=x=>x.edge>0 && x.holdEdge>0 && x.ci.lo>0 && x.p<.05 && x.pos>=2;
-    const mainPass=main.filter(pass), euroPass=euro.filter(pass);
-
+    const pass=x=>x.edge>0&&x.holdEdge>0&&x.ci.lo>0&&x.p<.05&&x.pos>=2;
+    const mp=main.filter(pass),ep=euro.filter(pass);
     let verdict="NO STABLE MULTI-HORIZON SIGNAL",color="#ffcf66";
-    if(mainPass.length||euroPass.length){
-      verdict=(mainPass.length?"MAIN ":"")+(euroPass.length?"EURO ":"")+"MULTI-HORIZON CANDIDATE";
-      color="#69e6b8";
-    }
-
-    fin.innerHTML=`<b>Multi-Horizon verdictas:
-      <span style="color:${color}">${verdict}</span></b><br>
-      MAIN patvirtinti horizontai: <b>${mainPass.length}/${horizons.length}</b>.
-      EURO patvirtinti horizontai: <b>${euroPass.length}/${horizons.length}</b>.<br>
-      <small>Patvirtintas horizontas reikalauja: edge > 0, holdout edge > 0,
-      bootstrap 95% apatinė riba > 0, Monte Carlo p < 0.05 ir bent 2/3 teigiami segmentai.
-      Jei nė vienas horizontas nepraeina, šis analogų metodas nelaikomas turinčiu stabilų
-      prognozuojamą efektą net ilgesniame laikotarpyje.</small>`;
-
-    localStorage.setItem("omegaSequenceLab21",JSON.stringify({
-      at:new Date().toISOString(),through:data.at(-1).date,k,minTrain,horizons,main,euro,verdict
-    }));
+    if(mp.length||ep.length){verdict=(mp.length?"MAIN ":"")+(ep.length?"EURO ":"")+"MULTI-HORIZON CANDIDATE";color="#69e6b8"}
+    fin.innerHTML=`<b>Multi-Horizon verdictas: <span style="color:${color}">${verdict}</span></b><br>
+      MAIN patvirtinti horizontai: <b>${mp.length}/${horizons.length}</b>. EURO patvirtinti horizontai: <b>${ep.length}/${horizons.length}</b>.<br>
+      <small>* Random p 2.1.1 versijoje yra greitas konservatyvus hypergeometric/normal kontrolinis testas.
+      Pagrindiniam verdiktui kartu būtini teigiamas holdout, bootstrap 95% CI ir chronologinis stabilumas.</small>`;
+    localStorage.setItem("omegaSequenceLab211",JSON.stringify({at:new Date().toISOString(),through:data.at(-1).date,k,horizons,main,euro,verdict}));
     st.textContent="Multi-Horizon Pattern Test baigtas.";
-  }catch(e){
-    st.innerHTML="<b>Klaida:</b> "+qesc(e.message||e);
-  }finally{btn.disabled=false}
+  }catch(e){st.innerHTML="<b>Klaida:</b> "+(typeof qesc==="function"?qesc(e.message||e):(e.message||e))}
+  finally{btn.disabled=false}
 }
 </script>
 
