@@ -29,7 +29,7 @@ footer{text-align:center;color:var(--muted);padding:28px}
 <h2>1. Duomenys ir naujas tiražas</h2>
 <div id="dataInfo" class="notice"></div>
 <div class="form"><input id="date" type="date"><input id="main" inputmode="text" placeholder="5 pagrindiniai, pvz. 2 7 10 29 30"><input id="euro" inputmode="text" placeholder="2 Euro, pvz. 5 10"></div>
-<div style="margin-top:9px"><button onclick="addDraw()">Pridėti rezultatą → mokyti → prognozuoti kitą</button><button class="alt" onclick="retrain()">Peržaisti visą istoriją chronologiškai</button></div>
+<div style="margin-top:9px"><button onclick="addDraw()">Pridėti rezultatą → mokyti → prognozuoti kitą</button><button class="alt" id="retrainBtn" type="button">Peržaisti visą istoriją chronologiškai</button></div>
 <p id="msg" class="muted"></p><div id="progressBox" style="display:none;margin-top:10px" class="notice"><b id="progressText">Ruošiama…</b><div class="bar" style="margin-top:10px;height:14px"><i id="progressBar" style="width:0%"></i></div></div>
 </section>
 
@@ -192,9 +192,12 @@ function addDraw(){
  }catch(e){document.getElementById("msg").textContent="Klaida: "+e.message}
 }
 async function retrain(){
- const btn=[...document.querySelectorAll("button")].find(b=>b.textContent.includes("Peržaisti visą istoriją"));
+ const btn=document.getElementById("retrainBtn");
  const box=document.getElementById("progressBox"), txt=document.getElementById("progressText"), bar=document.getElementById("progressBar"), msg=document.getElementById("msg");
- if(btn) btn.disabled=true; box.style.display="block"; msg.textContent="Vyksta tikras chronologinis walk-forward perskaičiavimas…";
+ if(btn){btn.disabled=true;btn.textContent="VYKSTA…";}
+ box.style.display="block"; txt.textContent="Pradedama… 0%"; bar.style.width="0%"; msg.textContent="Vyksta tikras chronologinis walk-forward perskaičiavimas…";
+ // Priverstinai leidžiame Safari nupiešti progreso lauką PRIEŠ sunkų skaičiavimą.
+ await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
  try{
   let mm=blankModel(MAIN_N), em=blankModel(EURO_N), evals=[], warm=100, total=Math.max(1,draws.length-warm);
   for(let t=warm;t<draws.length;t++){
@@ -203,13 +206,30 @@ async function retrain(){
    const mp=predict(mm,mf,5),ep=predict(em,ef,2),rbm=Array(MAIN_N).fill(5/MAIN_N),rbe=Array(EURO_N).fill(2/EURO_N);
    evals.push({date:d.date,mp,ep,main:d.numbers,euro:d.euro,mb:brier(mp,d.numbers),mbr:brier(rbm,d.numbers),mpct:percentile(mp,d.numbers),mrec:recall(mp,d.numbers,10),eb:brier(ep,d.euro),ebr:brier(rbe,d.euro),epct:percentile(ep,d.euro),erec:recall(ep,d.euro,4)});
    update(mm,mf,d.numbers); update(em,ef,d.euro);
-   if((t-warm)%15===0 || t===draws.length-1){let pc=Math.round((t-warm+1)/total*100);txt.textContent=`Perskaičiuota ${t-warm+1} / ${total} testų (${pc}%)`;bar.style.width=pc+"%";await new Promise(r=>setTimeout(r,0));}
+   // iPhone/Safari: atiduodame valdymą naršyklei dažnai, ne tik kas 15 testų.
+   if((t-warm)%2===0 || t===draws.length-1){
+    const done=t-warm+1, pc=Math.round(done/total*100);
+    txt.textContent=`Perskaičiuota ${done} / ${total} testų (${pc}%)`;
+    bar.style.width=pc+"%";
+    await new Promise(r=>setTimeout(r,0));
+   }
   }
   const mf=features(draws,MAIN_N,"numbers"),ef=features(draws,EURO_N,"euro");
-  state={mm,em,evals,nextM:predict(mm,mf,5),nextE:predict(em,ef,2)}; render();
+  state={mm,em,evals,nextM:predict(mm,mf,5),nextE:predict(em,ef,2)};
+  render();
   txt.textContent=`Baigta — ${evals.length} walk-forward testų.`;bar.style.width="100%";msg.textContent="Baigta: visa istorija peržaista prediction → result → update tvarka.";
- }catch(e){txt.textContent="KLAIDA: "+e.message;msg.textContent="Perskaičiavimas sustojo. "+e.message;console.error(e)}finally{if(btn)btn.disabled=false}
+ }catch(e){
+  txt.textContent="KLAIDA: "+(e&&e.message?e.message:String(e));
+  msg.textContent="Perskaičiavimas sustojo. "+(e&&e.message?e.message:String(e));
+  console.error(e);
+ }finally{
+  if(btn){btn.disabled=false;btn.textContent="Peržaisti visą istoriją chronologiškai";}
+ }
 }
 function resetAll(){if(confirm("Tikrai išvalyti V4.0 įrašus?")){localStorage.removeItem(KEY);draws=BASE.slice();save();trainSync();render()}}
-trainSync(); render();
+document.getElementById("retrainBtn").addEventListener("click", retrain);
+try{trainSync(); render();}catch(e){
+ document.getElementById("msg").textContent="Paleidimo klaida: "+(e&&e.message?e.message:String(e));
+ console.error(e);
+}
 </script></body></html>
