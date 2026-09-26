@@ -30,7 +30,7 @@ footer{text-align:center;color:var(--muted);padding:28px}
 <div id="dataInfo" class="notice"></div>
 <div class="form"><input id="date" type="date"><input id="main" inputmode="text" placeholder="5 pagrindiniai, pvz. 2 7 10 29 30"><input id="euro" inputmode="text" placeholder="2 Euro, pvz. 5 10"></div>
 <div style="margin-top:9px"><button onclick="addDraw()">Pridėti rezultatą → mokyti → prognozuoti kitą</button><button class="alt" onclick="retrain()">Peržaisti visą istoriją chronologiškai</button></div>
-<p id="msg" class="muted"></p>
+<p id="msg" class="muted"></p><div id="progressBox" style="display:none;margin-top:10px" class="notice"><b id="progressText">Ruošiama…</b><div class="bar" style="margin-top:10px;height:14px"><i id="progressBar" style="width:0%"></i></div></div>
 </section>
 
 <section class="card">
@@ -132,7 +132,7 @@ function update(model,fs,actual,lr=.018,l2=.0008){
 function brier(probs,actual){let s=new Set(actual);return mean(probs.map((p,i)=>(p-(s.has(i+1)?1:0))**2))}
 function percentile(probs,actual){let order=probs.map((p,i)=>[p,i+1]).sort((a,b)=>a[0]-b[0]),rank={};order.forEach((x,i)=>rank[x[1]]=i/(order.length-1));return mean(actual.map(v=>rank[v]))}
 function recall(probs,actual,k){let top=new Set(probs.map((p,i)=>[p,i+1]).sort((a,b)=>b[0]-a[0]).slice(0,k).map(x=>x[1]));return actual.filter(x=>top.has(x)).length/actual.length}
-function train(){
+function trainSync(){
  let mm=blankModel(MAIN_N), em=blankModel(EURO_N), evals=[];
  const warm=100;
  for(let t=warm;t<draws.length;t++){
@@ -146,7 +146,7 @@ function train(){
    update(mm,mf,d.numbers);update(em,ef,d.euro);
  }
  const hist=draws, mf=features(hist,MAIN_N,"numbers"),ef=features(hist,EURO_N,"euro");
- state={mm,em,evals,nextM:predict(mm,mf,5),nextE:predict(em,ef,2)}; render();
+ state={mm,em,evals,nextM:predict(mm,mf,5),nextE:predict(em,ef,2)};
 }
 function stats(a){
  if(!a.length)return null;
@@ -187,11 +187,29 @@ function addDraw(){
  try{
   let d=document.getElementById("date").value;if(!d)throw Error("Įvesk datą");
   let x={date:d,numbers:nums(document.getElementById("main").value,50,5),euro:nums(document.getElementById("euro").value,12,2)};
-  let i=draws.findIndex(q=>q.date===d); if(i>=0)draws[i]=x;else draws.push(x);draws.sort((a,b)=>a.date.localeCompare(b.date));save();train();
+  let i=draws.findIndex(q=>q.date===d); if(i>=0)draws[i]=x;else draws.push(x);draws.sort((a,b)=>a.date.localeCompare(b.date));save();trainSync();render();
   document.getElementById("msg").textContent=`${d} įrašytas. Modelis chronologiškai persimokė ir sukūrė naują kito tiražo reitingą.`;
  }catch(e){document.getElementById("msg").textContent="Klaida: "+e.message}
 }
-function retrain(){train();document.getElementById("msg").textContent="Baigta: visa istorija peržaista prediction → result → update tvarka."}
-function resetAll(){if(confirm("Tikrai išvalyti V4.0 įrašus?")){localStorage.removeItem(KEY);draws=BASE.slice();save();train()}}
-train();
+async function retrain(){
+ const btn=[...document.querySelectorAll("button")].find(b=>b.textContent.includes("Peržaisti visą istoriją"));
+ const box=document.getElementById("progressBox"), txt=document.getElementById("progressText"), bar=document.getElementById("progressBar"), msg=document.getElementById("msg");
+ if(btn) btn.disabled=true; box.style.display="block"; msg.textContent="Vyksta tikras chronologinis walk-forward perskaičiavimas…";
+ try{
+  let mm=blankModel(MAIN_N), em=blankModel(EURO_N), evals=[], warm=100, total=Math.max(1,draws.length-warm);
+  for(let t=warm;t<draws.length;t++){
+   const hist=draws.slice(0,t), d=draws[t];
+   const mf=features(hist,MAIN_N,"numbers"),ef=features(hist,EURO_N,"euro");
+   const mp=predict(mm,mf,5),ep=predict(em,ef,2),rbm=Array(MAIN_N).fill(5/MAIN_N),rbe=Array(EURO_N).fill(2/EURO_N);
+   evals.push({date:d.date,mp,ep,main:d.numbers,euro:d.euro,mb:brier(mp,d.numbers),mbr:brier(rbm,d.numbers),mpct:percentile(mp,d.numbers),mrec:recall(mp,d.numbers,10),eb:brier(ep,d.euro),ebr:brier(rbe,d.euro),epct:percentile(ep,d.euro),erec:recall(ep,d.euro,4)});
+   update(mm,mf,d.numbers); update(em,ef,d.euro);
+   if((t-warm)%15===0 || t===draws.length-1){let pc=Math.round((t-warm+1)/total*100);txt.textContent=`Perskaičiuota ${t-warm+1} / ${total} testų (${pc}%)`;bar.style.width=pc+"%";await new Promise(r=>setTimeout(r,0));}
+  }
+  const mf=features(draws,MAIN_N,"numbers"),ef=features(draws,EURO_N,"euro");
+  state={mm,em,evals,nextM:predict(mm,mf,5),nextE:predict(em,ef,2)}; render();
+  txt.textContent=`Baigta — ${evals.length} walk-forward testų.`;bar.style.width="100%";msg.textContent="Baigta: visa istorija peržaista prediction → result → update tvarka.";
+ }catch(e){txt.textContent="KLAIDA: "+e.message;msg.textContent="Perskaičiavimas sustojo. "+e.message;console.error(e)}finally{if(btn)btn.disabled=false}
+}
+function resetAll(){if(confirm("Tikrai išvalyti V4.0 įrašus?")){localStorage.removeItem(KEY);draws=BASE.slice();save();trainSync();render()}}
+trainSync(); render();
 </script></body></html>
