@@ -20,9 +20,9 @@ footer{text-align:center;color:var(--muted);padding:28px}
 @media(max-width:760px){.wrap{padding:10px}.hero,.card{padding:16px;border-radius:18px}.c4,.c6{grid-column:span 12}.form{grid-template-columns:1fr}.ranklist{columns:1}button{width:100%;margin:5px 0}}
 </style></head><body><div class="wrap">
 <section class="hero">
-<h1>OMEGA V4.0.4 — TRUE ONLINE LEARNER</h1>
+<h1>OMEGA V4.0.5 — TRUE ONLINE LEARNER</h1>
 <p class="muted">Prediction → Result → Update. Jokio mokymosi iš būsimo tiražo. Pirmiausia tikrinamas realus signalas; TOP3 leidžiamas tik tada, kai modelis walk-forward būdu įrodo pranašumą prieš vienodą Random bazę.</p>
-<span class="tag" style="background:#315b31">BUILD 4.0.4</span><span class="tag">MAIN 1–50</span><span class="tag">EURO 1–12</span><span class="tag">Walk-forward</span><span class="tag">Random control</span><span class="tag">Brier + Rank + Recall</span>
+<span class="tag" style="background:#315b31">BUILD 4.0.5</span><span class="tag">MAIN 1–50</span><span class="tag">EURO 1–12</span><span class="tag">Walk-forward</span><span class="tag">Random control</span><span class="tag">Brier + Rank + Recall</span>
 </section>
 
 <section class="card">
@@ -69,7 +69,7 @@ footer{text-align:center;color:var(--muted);padding:28px}
 <p>Modelio požymiai: kelių horizontų dažnis, paskutinių tiražų momentumas, tarpas nuo paskutinio pasirodymo, ankstesnio tiražo pakartojimas ir skaičiaus ilgalaikis bazinis dažnis. Logistiniai svoriai atnaujinami SGD būdu su L2 slopinimu. MAIN ir EURO mokomi atskirai. Naujas rezultatas iš karto tampa nauju mokymo pavyzdžiu.</p>
 <button class="danger" onclick="resetAll()">Išvalyti V4.0 būseną ir atkurti bazę</button>
 </section>
-<footer>OMEGA V4.0.4 • True Online Learner • Eurojackpot • BUILD 4.0.4</footer>
+<footer>OMEGA V4.0.4 • True Online Learner • Eurojackpot • BUILD 4.0.5</footer>
 </div>
 <script>
 "use strict";
@@ -195,14 +195,14 @@ let retrainRuns=0, retrainJob=null;
 function stateFingerprint(){if(!state||!state.evals||!state.evals.length)return "nėra";const s=stats(state.evals);return `MAIN ΔBrier ${fmt(s.mbr-s.mb)}, pct ${(s.mp*100).toFixed(1)}%, Top10 ${(s.mr*100).toFixed(1)}% | EURO ΔBrier ${fmt(s.ebr-s.eb)}, pct ${(s.ep*100).toFixed(1)}%`;}
 function startRetrainV404(){
  const btn=document.getElementById("retrainBtn"),box=document.getElementById("progressBox"),txt=document.getElementById("progressText"),bar=document.getElementById("progressBar"),msg=document.getElementById("msg");
- retrainRuns++; btn.disabled=true; btn.textContent="VYKSTA — 0%"; box.style.display="block"; txt.textContent="PASPAUDIMAS GAUTAS ✓ — pradedama 0%"; bar.style.width="1%"; msg.innerHTML="<b>Mygtukas veikia.</b> Pradedamas chronologinis perskaičiavimas…";
+ retrainRuns++; btn.disabled=true; btn.textContent="VYKSTA — 0%"; box.style.display="block"; txt.textContent="PASPAUDIMAS GAUTAS ✓ — V4.0.5 — pradedama 0%"; bar.style.width="1%"; msg.innerHTML="<b>Mygtukas veikia.</b> Pradedamas chronologinis perskaičiavimas…";
  retrainJob={runNo:retrainRuns,started:Date.now(),before:stateFingerprint(),mm:blankModel(MAIN_N),em:blankModel(EURO_N),evals:[],warm:100,t:100,total:Math.max(1,draws.length-100)};
  setTimeout(retrainChunkV404,120);
 }
 function retrainChunkV404(){
  const j=retrainJob;if(!j)return;const btn=document.getElementById("retrainBtn"),txt=document.getElementById("progressText"),bar=document.getElementById("progressBar"),msg=document.getElementById("msg");
  try{
-  const stop=Math.min(draws.length,j.t+3);
+  const stop=Math.min(draws.length,j.t+1);
   for(;j.t<stop;j.t++){
    const hist=draws.slice(0,j.t),d=draws[j.t],mf=features(hist,MAIN_N,"numbers"),ef=features(hist,EURO_N,"euro"),mp=predict(j.mm,mf,5),ep=predict(j.em,ef,2),rbm=Array(MAIN_N).fill(5/MAIN_N),rbe=Array(EURO_N).fill(2/EURO_N);
    j.evals.push({date:d.date,mp,ep,main:d.numbers,euro:d.euro,mb:brier(mp,d.numbers),mbr:brier(rbm,d.numbers),mpct:percentile(mp,d.numbers),mrec:recall(mp,d.numbers,10),eb:brier(ep,d.euro),ebr:brier(rbe,d.euro),epct:percentile(ep,d.euro),erec:recall(ep,d.euro,4)});
@@ -215,5 +215,10 @@ function retrainChunkV404(){
  }catch(e){txt.innerHTML=`<b class="bad">KLAIDA:</b> ${String(e&&e.message?e.message:e)}`;msg.textContent="Perskaičiavimas sustojo.";btn.disabled=false;btn.textContent="Peržaisti visą istoriją chronologiškai";retrainJob=null;}
 }
 function resetAll(){if(confirm("Tikrai išvalyti V4.0 įrašus?")){localStorage.removeItem(KEY);draws=BASE.slice();save();trainSync();render()}}
-trainSync(); render();
+// V4.0.5: NO heavy synchronous training at page load. Safari was spending/killing the JS here.
+(function bootV405(){
+ const last=draws[draws.length-1];
+ document.getElementById("dataInfo").innerHTML=`<b>${draws.length} tiražai</b> • paskutinis ${last.date}: ${last.numbers.join(" ")} + ${last.euro.join(" ")}<br><span class="muted">Duomenys paruošti. Pilnas modelio auditas paleidžiamas tik paspaudus mėlyną mygtuką.</span>`;
+ document.getElementById("msg").innerHTML='<b class="good">V4.0.5 paruošta ✓</b> — skaičiavimas dar nepaleistas. Spausk „Peržaisti visą istoriją chronologiškai“.';
+})();
 </script></body></html>
