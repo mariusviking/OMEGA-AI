@@ -20,16 +20,16 @@ footer{text-align:center;color:var(--muted);padding:28px}
 @media(max-width:760px){.wrap{padding:10px}.hero,.card{padding:16px;border-radius:18px}.c4,.c6{grid-column:span 12}.form{grid-template-columns:1fr}.ranklist{columns:1}button{width:100%;margin:5px 0}}
 </style></head><body><div class="wrap">
 <section class="hero">
-<h1>OMEGA V4.0 — TRUE ONLINE LEARNER</h1>
+<h1>OMEGA V4.0.4 — TRUE ONLINE LEARNER</h1>
 <p class="muted">Prediction → Result → Update. Jokio mokymosi iš būsimo tiražo. Pirmiausia tikrinamas realus signalas; TOP3 leidžiamas tik tada, kai modelis walk-forward būdu įrodo pranašumą prieš vienodą Random bazę.</p>
-<span class="tag">MAIN 1–50</span><span class="tag">EURO 1–12</span><span class="tag">Walk-forward</span><span class="tag">Random control</span><span class="tag">Brier + Rank + Recall</span>
+<span class="tag" style="background:#315b31">BUILD 4.0.4</span><span class="tag">MAIN 1–50</span><span class="tag">EURO 1–12</span><span class="tag">Walk-forward</span><span class="tag">Random control</span><span class="tag">Brier + Rank + Recall</span>
 </section>
 
 <section class="card">
 <h2>1. Duomenys ir naujas tiražas</h2>
 <div id="dataInfo" class="notice"></div>
 <div class="form"><input id="date" type="date"><input id="main" inputmode="text" placeholder="5 pagrindiniai, pvz. 2 7 10 29 30"><input id="euro" inputmode="text" placeholder="2 Euro, pvz. 5 10"></div>
-<div style="margin-top:9px"><button onclick="addDraw()">Pridėti rezultatą → mokyti → prognozuoti kitą</button><button class="alt" id="retrainBtn" type="button">Peržaisti visą istoriją chronologiškai</button></div>
+<div style="margin-top:9px"><button onclick="addDraw()">Pridėti rezultatą → mokyti → prognozuoti kitą</button><button class="alt" id="retrainBtn" type="button" onclick="startRetrainV404()">Peržaisti visą istoriją chronologiškai</button></div>
 <p id="msg" class="muted">Pradinis modelis užkrautas. Rankiniam pilnam auditui spausk „Peržaisti visą istoriją chronologiškai“.</p><div id="progressBox" style="display:none;margin-top:10px" class="notice"><b id="progressText">Ruošiama…</b><div class="bar" style="margin-top:10px;height:14px"><i id="progressBar" style="width:0%"></i></div></div>
 </section>
 
@@ -69,7 +69,7 @@ footer{text-align:center;color:var(--muted);padding:28px}
 <p>Modelio požymiai: kelių horizontų dažnis, paskutinių tiražų momentumas, tarpas nuo paskutinio pasirodymo, ankstesnio tiražo pakartojimas ir skaičiaus ilgalaikis bazinis dažnis. Logistiniai svoriai atnaujinami SGD būdu su L2 slopinimu. MAIN ir EURO mokomi atskirai. Naujas rezultatas iš karto tampa nauju mokymo pavyzdžiu.</p>
 <button class="danger" onclick="resetAll()">Išvalyti V4.0 būseną ir atkurti bazę</button>
 </section>
-<footer>OMEGA V4.0 • True Online Learner • Eurojackpot • evidence first</footer>
+<footer>OMEGA V4.0.4 • True Online Learner • Eurojackpot • BUILD 4.0.4</footer>
 </div>
 <script>
 "use strict";
@@ -191,27 +191,29 @@ function addDraw(){
   document.getElementById("msg").textContent=`${d} įrašytas. Modelis chronologiškai persimokė ir sukūrė naują kito tiražo reitingą.`;
  }catch(e){document.getElementById("msg").textContent="Klaida: "+e.message}
 }
-let retrainRuns=0;
+let retrainRuns=0, retrainJob=null;
 function stateFingerprint(){if(!state||!state.evals||!state.evals.length)return "nėra";const s=stats(state.evals);return `MAIN ΔBrier ${fmt(s.mbr-s.mb)}, pct ${(s.mp*100).toFixed(1)}%, Top10 ${(s.mr*100).toFixed(1)}% | EURO ΔBrier ${fmt(s.ebr-s.eb)}, pct ${(s.ep*100).toFixed(1)}%`;}
-async function retrain(){
+function startRetrainV404(){
  const btn=document.getElementById("retrainBtn"),box=document.getElementById("progressBox"),txt=document.getElementById("progressText"),bar=document.getElementById("progressBar"),msg=document.getElementById("msg");
- retrainRuns++;const runNo=retrainRuns,started=performance.now(),before=stateFingerprint();
- btn.disabled=true;btn.textContent="VYKSTA — 0%";box.style.display="block";bar.style.width="0%";txt.textContent=`Paleidimas #${runNo}: ruošiama 0%`;msg.textContent="Pradėtas chronologinis walk-forward. Rezultatai perskaičiuojami nuo nulio.";
- await new Promise(requestAnimationFrame);await new Promise(r=>setTimeout(r,80));
+ retrainRuns++; btn.disabled=true; btn.textContent="VYKSTA — 0%"; box.style.display="block"; txt.textContent="PASPAUDIMAS GAUTAS ✓ — pradedama 0%"; bar.style.width="1%"; msg.innerHTML="<b>Mygtukas veikia.</b> Pradedamas chronologinis perskaičiavimas…";
+ retrainJob={runNo:retrainRuns,started:Date.now(),before:stateFingerprint(),mm:blankModel(MAIN_N),em:blankModel(EURO_N),evals:[],warm:100,t:100,total:Math.max(1,draws.length-100)};
+ setTimeout(retrainChunkV404,120);
+}
+function retrainChunkV404(){
+ const j=retrainJob;if(!j)return;const btn=document.getElementById("retrainBtn"),txt=document.getElementById("progressText"),bar=document.getElementById("progressBar"),msg=document.getElementById("msg");
  try{
-  let mm=blankModel(MAIN_N),em=blankModel(EURO_N),evals=[],warm=100,total=Math.max(1,draws.length-warm);
-  for(let t=warm;t<draws.length;t++){
-   const hist=draws.slice(0,t),d=draws[t],mf=features(hist,MAIN_N,"numbers"),ef=features(hist,EURO_N,"euro"),mp=predict(mm,mf,5),ep=predict(em,ef,2),rbm=Array(MAIN_N).fill(5/MAIN_N),rbe=Array(EURO_N).fill(2/EURO_N);
-   evals.push({date:d.date,mp,ep,main:d.numbers,euro:d.euro,mb:brier(mp,d.numbers),mbr:brier(rbm,d.numbers),mpct:percentile(mp,d.numbers),mrec:recall(mp,d.numbers,10),eb:brier(ep,d.euro),ebr:brier(rbe,d.euro),epct:percentile(ep,d.euro),erec:recall(ep,d.euro,4)});
-   update(mm,mf,d.numbers);update(em,ef,d.euro);
-   if((t-warm)%5===0||t===draws.length-1){const pc=Math.min(100,Math.round((t-warm+1)/total*100));btn.textContent=`VYKSTA — ${pc}%`;txt.textContent=`Paleidimas #${runNo}: ${t-warm+1} / ${total} testų (${pc}%)`;bar.style.width=pc+"%";await new Promise(requestAnimationFrame);}
+  const stop=Math.min(draws.length,j.t+3);
+  for(;j.t<stop;j.t++){
+   const hist=draws.slice(0,j.t),d=draws[j.t],mf=features(hist,MAIN_N,"numbers"),ef=features(hist,EURO_N,"euro"),mp=predict(j.mm,mf,5),ep=predict(j.em,ef,2),rbm=Array(MAIN_N).fill(5/MAIN_N),rbe=Array(EURO_N).fill(2/EURO_N);
+   j.evals.push({date:d.date,mp,ep,main:d.numbers,euro:d.euro,mb:brier(mp,d.numbers),mbr:brier(rbm,d.numbers),mpct:percentile(mp,d.numbers),mrec:recall(mp,d.numbers,10),eb:brier(ep,d.euro),ebr:brier(rbe,d.euro),epct:percentile(ep,d.euro),erec:recall(ep,d.euro,4)});
+   update(j.mm,mf,d.numbers);update(j.em,ef,d.euro);
   }
-  const mf=features(draws,MAIN_N,"numbers"),ef=features(draws,EURO_N,"euro");state={mm,em,evals,nextM:predict(mm,mf,5),nextE:predict(em,ef,2)};render();
-  const sec=((performance.now()-started)/1000).toFixed(1),after=stateFingerprint();txt.innerHTML=`<b class="good">BAIGTA ✓</b> — ${evals.length} walk-forward testų per ${sec} s.`;bar.style.width="100%";msg.innerHTML=`<b>Perskaičiavimas tikrai įvykdytas.</b> Paleidimas #${runNo}.<br><span class="muted">Prieš: ${before}<br>Po: ${after}<br>Jei skaičiai vienodi, tai normalu: tas pats algoritmas + tie patys duomenys turi duoti tą patį rezultatą.</span>`;
- }catch(e){txt.innerHTML=`<b class="bad">KLAIDA:</b> ${String(e.message||e)}`;msg.textContent="Perskaičiavimas sustojo.";console.error(e)}
- finally{btn.disabled=false;btn.textContent="Peržaisti visą istoriją chronologiškai";}
+  const done=j.t-j.warm,pc=Math.min(100,Math.round(done/j.total*100));btn.textContent=`VYKSTA — ${pc}%`;txt.textContent=`Paleidimas #${j.runNo}: ${done} / ${j.total} testų (${pc}%)`;bar.style.width=Math.max(1,pc)+"%";
+  if(j.t<draws.length){setTimeout(retrainChunkV404,0);return;}
+  const mf=features(draws,MAIN_N,"numbers"),ef=features(draws,EURO_N,"euro");state={mm:j.mm,em:j.em,evals:j.evals,nextM:predict(j.mm,mf,5),nextE:predict(j.em,ef,2)};render();
+  const sec=((Date.now()-j.started)/1000).toFixed(1),after=stateFingerprint();txt.innerHTML=`<b class="good">BAIGTA ✓</b> — ${j.evals.length} walk-forward testų per ${sec} s.`;bar.style.width="100%";msg.innerHTML=`<b>Perskaičiavimas tikrai įvykdytas.</b> Paleidimas #${j.runNo}.<br><span class="muted">Prieš: ${j.before}<br>Po: ${after}<br>Jei rezultatai vienodi, tai normalu: tie patys duomenys + tas pats algoritmas = tas pats rezultatas.</span>`;btn.disabled=false;btn.textContent="Peržaisti visą istoriją chronologiškai";retrainJob=null;
+ }catch(e){txt.innerHTML=`<b class="bad">KLAIDA:</b> ${String(e&&e.message?e.message:e)}`;msg.textContent="Perskaičiavimas sustojo.";btn.disabled=false;btn.textContent="Peržaisti visą istoriją chronologiškai";retrainJob=null;}
 }
 function resetAll(){if(confirm("Tikrai išvalyti V4.0 įrašus?")){localStorage.removeItem(KEY);draws=BASE.slice();save();trainSync();render()}}
 trainSync(); render();
-document.getElementById("retrainBtn").addEventListener("click", retrain);
 </script></body></html>
