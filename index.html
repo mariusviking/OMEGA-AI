@@ -402,7 +402,53 @@ function v7raw(hist,n,key,c){var o=[],i,j,q,L=hist.length,st=Math.max(1,L-c.win)
  else {var gaps=[];for(q=1;q<last.length;q++)gaps.push(last[q]-last[q-1]);var gm=gaps.length?gaps.reduce(function(a,b){return a+b},0)/gaps.length:0;for(i=1;i<=n;i++){var best=99;for(q=0;q<last.length;q++)best=Math.min(best,Math.abs(Math.abs(i-last[q])-gm));o[i-1]=-best}}return o}
 function v7eval(ds,c,key,n,k,start){var A=[],rb=[],t,i,p;for(i=0;i<n;i++)rb[i]=k/n;for(t=start;t<ds.length;t++){p=v5prob(v7raw(ds.slice(0,t),n,key,c),k,.20);A.push({date:ds[t].date,db:brier(rb,ds[t][key])-brier(p,ds[t][key]),pct:pct(p,ds[t][key]),p:p,actual:ds[t][key].slice()})}return A}
 function top3(p){var a=[];for(var i=0;i<p.length;i++)a.push([p[i],i+1]);a.sort(function(x,y){return y[0]-x[0]});return a.slice(0,3).map(function(x){return x[1]}).join(' · ')}
-window.runV7=function(){var btn=el('v7run');btn.disabled=true;el('v7status').innerHTML='<b>VYKSTA…</b> tikrinamos struktūrinės priklausomybės be ateities informacijos.';setTimeout(function(){try{var cfg=v7defs(),res=[],start=180,dom,key,n,k,i,N,d1,d2,s;for(dom=0;dom<2;dom++){key=dom?'euro':'numbers';n=dom?12:50;k=dom?2:5;for(i=0;i<cfg.length;i++){s=v7eval(draws,cfg[i],key,n,k,start);N=s.length;d1=Math.floor(N*.60);d2=Math.floor(N*.80);res.push({domain:dom?'EURO':'MAIN',key:key,n:n,k:k,cfg:cfg[i],s:s,d1:d1,d2:d2,ds:v5score(s.slice(0,d1)),vs:v5score(s.slice(d1,d2)),hs:v5score(s.slice(d2))})}}var selected=[];['MAIN','EURO'].forEach(function(D){var a=res.filter(function(x){return x.domain===D}).sort(function(a,b){return b.ds.db-a.ds.db});for(var q=0;q<Math.min(8,a.length);q++)if(a[q].ds.db>0&&a[q].ds.pct>.505)selected.push(a[q])});var val=selected.filter(function(x){return x.vs.db>0&&x.vs.pct>.505}),hold=val.filter(function(x){return x.hs.db>0&&x.hs.pct>.505});for(i=0;i<hold.length;i++)hold[i].pp=v5permP(hold[i].s.slice(hold[i].d2),hold[i].hs.db,999,71001+i*211);var final=hold.filter(function(x){return x.pp<=.05}),show=selected.slice().sort(function(a,b){return (b.vs.db+b.hs.db)-(a.vs.db+a.hs.db)}).slice(0,16),rows='';el('v7cand').textContent=cfg.length*2;el('v7val').textContent=val.length+'/'+selected.length;el('v7hold').textContent=hold.length+'/'+val.length;for(i=0;i<show.length;i++){var x=show[i],ok=x.pp!=null&&x.pp<=.05;rows+='<tr><td>'+x.domain+'</td><td><b>'+x.cfg.name+'</b></td><td>'+f4(x.ds.db)+'</td><td>'+f4(x.vs.db)+'</td><td>'+f4(x.hs.db)+'</td><td>'+(x.hs.pct*100).toFixed(1)+'%</td><td>'+(x.pp==null?'—':x.pp.toFixed(3))+'</td><td>'+(ok?'<b class="good">PASS</b>':'<span class="warn">NO</span>')+'</td></tr>'}el('v7rows').innerHTML=rows;if(final.length){el('v7verdict').innerHTML='<b class="good">RASTAS ISTORIŠKAI IŠGYVENĘS STRUKTŪRINIS KANDIDATAS.</b><br>Jis praėjo discovery → validation → holdout → permutation p≤0.05. Tai vis tiek nėra garantija kitam tiražui; taisyklė nuo šiol turi būti užšaldyta.';var fm=final.filter(function(x){return x.domain==='MAIN'}).sort(function(a,b){return a.pp-b.pp}),fe=final.filter(function(x){return x.domain==='EURO'}).sort(function(a,b){return a.pp-b.pp});if(fm.length||fe.length){el('v7top').style.display='block';if(fm.length)el('v7mainTop').textContent=top3(v5prob(v7raw(draws,50,'numbers',fm[0].cfg),5,.20));else el('v7mainTop').textContent='UŽRAKINTA';if(fe.length)el('v7euroTop').textContent=top3(v5prob(v7raw(draws,12,'euro',fe[0].cfg),2,.20));else el('v7euroTop').textContent='UŽRAKINTA'}}}else{el('v7top').style.display='none';el('v7verdict').innerHTML='<b class="warn">PATIKIMOS ISTORINĖS PRIKLAUSOMYBĖS NERASTA.</b><br>Nė vienas struktūrinis kandidatas nepraėjo visos nepriklausomos grandinės. TOP3 lieka užrakintas.'}el('v7status').innerHTML='<b class="good">BAIGTA ✓</b> — '+(cfg.length*2)+' kandidatų, 999 permutacijos finalistams.';btn.disabled=false}catch(e){el('v7status').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e);btn.disabled=false}},50)}
+window.runV7=function(){
+  var btn=el('v7run'); btn.disabled=true;
+  el('v7status').innerHTML='<b>VYKSTA…</b> tikrinamos struktūrinės priklausomybės be ateities informacijos.';
+  setTimeout(function(){
+    try {
+      var cfg=v7defs(),res=[],startAt=180,dom,key,n,k,i,N,d1,d2,scores;
+      for(dom=0;dom<2;dom++){
+        key=dom?'euro':'numbers'; n=dom?12:50; k=dom?2:5;
+        for(i=0;i<cfg.length;i++){
+          scores=v7eval(draws,cfg[i],key,n,k,startAt); N=scores.length; d1=Math.floor(N*.60); d2=Math.floor(N*.80);
+          res.push({domain:dom?'EURO':'MAIN',key:key,n:n,k:k,cfg:cfg[i],s:scores,d1:d1,d2:d2,ds:v5score(scores.slice(0,d1)),vs:v5score(scores.slice(d1,d2)),hs:v5score(scores.slice(d2))});
+        }
+      }
+      var selected=[];
+      ['MAIN','EURO'].forEach(function(D){
+        var a=res.filter(function(x){return x.domain===D}).sort(function(a,b){return b.ds.db-a.ds.db});
+        for(var q=0;q<Math.min(8,a.length);q++){ if(a[q].ds.db>0&&a[q].ds.pct>.505) selected.push(a[q]); }
+      });
+      var val=selected.filter(function(x){return x.vs.db>0&&x.vs.pct>.505});
+      var hold=val.filter(function(x){return x.hs.db>0&&x.hs.pct>.505});
+      for(i=0;i<hold.length;i++){hold[i].pp=v5permP(hold[i].s.slice(hold[i].d2),hold[i].hs.db,999,71001+i*211);}
+      var final=hold.filter(function(x){return x.pp<=.05});
+      var show=selected.slice().sort(function(a,b){return (b.vs.db+b.hs.db)-(a.vs.db+a.hs.db)}).slice(0,16),rows='';
+      el('v7cand').textContent=cfg.length*2; el('v7val').textContent=val.length+'/'+selected.length; el('v7hold').textContent=hold.length+'/'+val.length;
+      for(i=0;i<show.length;i++){
+        var x=show[i],ok=x.pp!=null&&x.pp<=.05;
+        rows+='<tr><td>'+x.domain+'</td><td><b>'+x.cfg.name+'</b></td><td>'+f4(x.ds.db)+'</td><td>'+f4(x.vs.db)+'</td><td>'+f4(x.hs.db)+'</td><td>'+(x.hs.pct*100).toFixed(1)+'%</td><td>'+(x.pp==null?'—':x.pp.toFixed(3))+'</td><td>'+(ok?'<b class="good">PASS</b>':'<span class="warn">NO</span>')+'</td></tr>';
+      }
+      el('v7rows').innerHTML=rows;
+      if(final.length){
+        el('v7verdict').innerHTML='<b class="good">RASTAS ISTORIŠKAI IŠGYVENĘS STRUKTŪRINIS KANDIDATAS.</b><br>Jis praėjo discovery → validation → holdout → permutation p≤0.05. Tai nėra garantija kitam tiražui.';
+        var fm=final.filter(function(x){return x.domain==='MAIN'}).sort(function(a,b){return a.pp-b.pp});
+        var fe=final.filter(function(x){return x.domain==='EURO'}).sort(function(a,b){return a.pp-b.pp});
+        el('v7top').style.display='block';
+        el('v7mainTop').textContent=fm.length?top3(v5prob(v7raw(draws,50,'numbers',fm[0].cfg),5,.20)):'UŽRAKINTA';
+        el('v7euroTop').textContent=fe.length?top3(v5prob(v7raw(draws,12,'euro',fe[0].cfg),2,.20)):'UŽRAKINTA';
+      } else {
+        el('v7top').style.display='none';
+        el('v7verdict').innerHTML='<b class="warn">PATIKIMOS ISTORINĖS PRIKLAUSOMYBĖS NERASTA.</b><br>Nė vienas struktūrinis kandidatas nepraėjo visos nepriklausomos grandinės. TOP3 lieka užrakintas.';
+      }
+      el('v7status').innerHTML='<b class="good">BAIGTA ✓</b> — '+(cfg.length*2)+' kandidatų, 999 permutacijos finalistams.';
+    } catch(e) {
+      el('v7status').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e);
+    }
+    btn.disabled=false;
+  },50);
+};
 })();
 </script>
 
