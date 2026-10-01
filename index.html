@@ -775,4 +775,58 @@ window.runV85=function(){
 })();
 </script>
 
+
+<section class="card" id="v86lab">
+<h2>17. OMEGA V8.6 — EURO Change-Point / Regime Test</h2>
+<p class="muted">Tikrina V8.5 pastebėtą EURO zone signalo silpnėjimą nepersidengiančiais chronologiniais blokais. Kandidatas ir lūžio vieta nustatomi tik pre-HOLDOUT istorijoje; galutinis HOLDOUT lieka izoliuotas.</p>
+<button class="v5btn" id="v86run" onclick="runV86()">Paleisti V8.6 Change-Point testą</button>
+<div id="v86status" class="notice" style="margin-top:14px"><b>LOCKED</b> — V8.6 dar nepaleistas.</div>
+<div class="v5grid" style="margin-top:18px">
+<div class="v5card"><div class="muted">Užšaldytas kandidatas</div><div class="v5big" id="v86best">—</div></div>
+<div class="v5card"><div class="muted">Nepersidengiančių blokų</div><div class="v5big" id="v86blocks">—</div></div>
+<div class="v5card"><div class="muted">Aptiktas lūžio taškas</div><div class="v5big" id="v86cp">—</div></div>
+</div>
+<div class="v5grid" style="margin-top:12px">
+<div class="v5card"><div class="muted">Prieš lūžį Δ</div><div class="v5big" id="v86before">—</div></div>
+<div class="v5card"><div class="muted">Po lūžio Δ</div><div class="v5big" id="v86after">—</div></div>
+<div class="v5card"><div class="muted">Change-point perm. p</div><div class="v5big" id="v86p">—</div></div>
+</div>
+<div id="v86audit" class="notice" style="margin-top:12px"><b>AUDITAS:</b> dar nepaleistas.</div>
+<h3>Nepersidengiantys chronologiniai blokai</h3>
+<div class="v5table"><table><thead><tr><th>Blokas</th><th>Periodas</th><th>N</th><th>Δ</th><th>pct</th><th>Režimas</th></tr></thead><tbody id="v86rows"></tbody></table></div>
+<h3>Change-point santrauka</h3>
+<div class="v5table"><table><thead><tr><th>Rodiklis</th><th>Rezultatas</th></tr></thead><tbody id="v86summary"></tbody></table></div>
+<div id="v86verdict" class="notice"><b class="warn">TESTAS DAR NEPALEISTAS.</b></div>
+</section>
+<script>
+(function(){
+function d86(){return [40,80,120,180].map(function(w){return {type:'zone',win:w,name:'zone '+w}})}
+function r86(hist,n,c){var o=[],i,j,q,L=hist.length,st=Math.max(1,L-c.win),last=hist[L-1]?hist[L-1].euro:[];for(i=0;i<n;i++)o[i]=0;var zones=3,z=Math.ceil(n/zones),active=[];for(i=0;i<zones;i++)active[i]=0;for(q=0;q<last.length;q++)active[Math.min(zones-1,Math.floor((last[q]-1)/z))]++;for(j=st;j<L;j++){var a=hist[j-1].euro,b=hist[j].euro,zw=0;for(q=0;q<a.length;q++){var zi=Math.min(zones-1,Math.floor((a[q]-1)/z));if(active[zi])zw+=active[zi]}if(zw)for(var x=0;x<b.length;x++)if(b[x]<=n)o[b[x]-1]+=zw}return o}
+function e86(c){var A=[],rb=[],n=12,k=2;for(var i=0;i<n;i++)rb[i]=k/n;for(var t=180;t<draws.length;t++){var p=v5prob(r86(draws.slice(0,t),n,c),k,.20);A.push({date:draws[t].date,db:brier(rb,draws[t].euro)-brier(p,draws[t].euro),pct:pct(p,draws[t].euro)})}return A}
+function m86(a){var s=0;for(var i=0;i<a.length;i++)s+=a[i];return a.length?s/a.length:0}
+function stat86(v,c){return Math.abs(m86(v.slice(0,c))-m86(v.slice(c)))}
+function rng86(seed){var x=seed>>>0;return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return (x>>>0)/4294967296}}
+function pp86(v,obs,iters){var R=rng86(860317),ge=0,n=v.length;for(var z=0;z<iters;z++){var b=v.slice();for(var i=n-1;i>0;i--){var j=Math.floor(R()*(i+1)),tmp=b[i];b[i]=b[j];b[j]=tmp}var best=0;for(var c=2;c<=n-2;c++){var st=stat86(b,c);if(st>best)best=st}if(best>=obs-1e-15)ge++}return (ge+1)/(iters+1)}
+window.runV86=function(){var btn=el('v86run'),t0=performance.now();btn.disabled=true;el('v86status').innerHTML='<b>VYKSTA…</b> change-point kontrolė.';
+setTimeout(function(){try{
+var pool=d86().map(function(c){return {cfg:c,s:e86(c)}}),N=pool[0].s.length,hs=Math.floor(N*.85);
+var ranked=pool.map(function(x){return {x:x,pre:v5score(x.s.slice(0,hs))}}).sort(function(a,b){return b.pre.db-a.pre.db||b.pre.pct-a.pre.pct});
+var frozen=ranked[0],series=frozen.x.s,BS=57,blocks=[],s=0;
+while(s<hs){var e=Math.min(hs,s+BS);if(e-s>=20)blocks.push({s:s,e:e,z:v5score(series.slice(s,e))});s=e}
+var vals=blocks.map(function(b){return b.z.db}),cut=0,bst=-1;
+for(var c=2;c<=blocks.length-2;c++){var q=stat86(vals,c);if(q>bst){bst=q;cut=c}}
+var before=m86(vals.slice(0,cut)),after=m86(vals.slice(cut)),p=pp86(vals,bst,4999),hold=v5score(series.slice(hs));
+var rows='';for(var i=0;i<blocks.length;i++){var b=blocks[i];rows+='<tr><td>'+(i+1)+'</td><td>'+series[b.s].date+' → '+series[b.e-1].date+'</td><td>'+(b.e-b.s)+'</td><td>'+f4(b.z.db)+'</td><td>'+(b.z.pct*100).toFixed(1)+'%</td><td>'+(i<cut?'prieš':'po')+'</td></tr>'}
+el('v86rows').innerHTML=rows;var cp=blocks[cut]?series[blocks[cut].s].date:'—';
+el('v86best').textContent=frozen.x.cfg.name;el('v86blocks').textContent=blocks.length;el('v86cp').textContent=cp;el('v86before').textContent=f4(before);el('v86after').textContent=f4(after);el('v86p').textContent=p.toFixed(4);
+el('v86summary').innerHTML='<tr><td>Didžiausias pre-HOLDOUT režimų skirtumas</td><td>'+f4(bst)+'</td></tr><tr><td>Vidutinis Δ prieš / po lūžio</td><td>'+f4(before)+' / '+f4(after)+'</td></tr><tr><td>Permutation kontrolė (4 999)</td><td>p = '+p.toFixed(4)+'</td></tr><tr><td>Galutinis nepaliestas HOLDOUT</td><td>Δ '+f4(hold.db)+' / '+(hold.pct*100).toFixed(1)+'%</td></tr>';
+el('v86audit').innerHTML='<b>AUDITAS:</b> <span class="good">HOLDOUT izoliuotas.</span><br>Kandidatas ir geriausias lūžio taškas parenkami tik pre-HOLDOUT dalyje. Naudojami nepersidengiantys ~57 prognozių blokai. Kiekvienoje iš 4 999 permutacijų iš naujo ieškomas geriausias lūžio taškas, todėl p reikšmė įvertina ir lūžio vietos parinkimą.';
+if(p<=.05&&before>0&&after<0&&hold.db<0)el('v86verdict').innerHTML='<b class="good">APTIKTAS STATISTIŠKAI IŠSISKIRIANTIS PRE-HOLDOUT REŽIMO LŪŽIS.</b><br>Nepersidengiantys blokai pereina iš teigiamo į neigiamą Δ, permutation p≤0.05, o nepaliestas HOLDOUT išlaiko neigiamą kryptį.';
+else if(before>0&&after<0)el('v86verdict').innerHTML='<b class="warn">KRYPTIES LŪŽIS MATOMAS, BET STATISTINĖ KONTROLĖ JO NEPATVIRTINO.</b><br>Δ pereina iš teigiamo į neigiamą, tačiau permutation p='+p.toFixed(4)+'.';
+else el('v86verdict').innerHTML='<b>AIŠKAUS TEIGIAMAS → NEIGIAMAS REŽIMO LŪŽIO NERASTA.</b><br>Nepersidengiantys blokai nepatvirtino V8.5 slenkančių langų vaizdo kaip aiškaus struktūrinio lūžio.';
+el('v86status').innerHTML='<b class="good">BAIGTA ✓</b> — '+blocks.length+' nepersidengiančių blokų; 4 999 permutacijos; '+((performance.now()-t0)/1000).toFixed(3)+' s.';
+}catch(err){el('v86status').innerHTML='<b class="bad">KLAIDA:</b> '+String(err.message||err)}btn.disabled=false},50)};
+})();
+</script>
+
 </body></html>
