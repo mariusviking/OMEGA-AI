@@ -896,4 +896,47 @@ el('v87status').innerHTML='<b class="good">BAIGTA ✓</b> — '+sizes.length+' b
 })();
 </script>
 
+<section class="card" id="v88">
+<h2>19. OMEGA V8.8 — tikras 2023–2026 walk-forward testas</h2>
+<p class="muted">Tikrina, ar EURO zone signalas turi realią prognozinę vertę po istorinio režimo lūžio. Modelio tipas ir langas užšaldomi naudojant tik duomenis iki 2022-12-31. 2023-01-01 → 2026-09-29 rezultatai nenaudojami modelio pasirinkimui ir vertinami chronologiškai po vieną traukimą.</p>
+<button class="v5btn" id="v88run" onclick="runV88()">Paleisti V8.8 walk-forward testą</button>
+<div id="v88status" class="note" style="margin-top:14px">Paruošta.</div>
+<div class="v5grid" style="margin-top:14px">
+<div class="v5card"><div class="muted">Užšaldytas modelis</div><div class="v5big" id="v88model">—</div></div>
+<div class="v5card"><div class="muted">2023–2026 prognozių</div><div class="v5big" id="v88n">—</div></div>
+<div class="v5card"><div class="muted">Vidutinis Δ</div><div class="v5big" id="v88delta">—</div></div>
+<div class="v5card"><div class="muted">Modelio pct</div><div class="v5big" id="v88pct">—</div></div>
+<div class="v5card"><div class="muted">95% block-bootstrap CI</div><div class="v5big" id="v88ci" style="font-size:clamp(24px,4vw,42px)">—</div></div>
+<div class="v5card"><div class="muted">Vienpusis sign-flip p (Δ&gt;0)</div><div class="v5big" id="v88p">—</div></div>
+</div>
+<div id="v88audit" class="note" style="margin-top:14px"></div>
+<h3>Rezultatai pagal metus</h3>
+<div style="overflow-x:auto"><table><thead><tr><th>Metai</th><th>N</th><th>Vid. Δ</th><th>Modelio pct</th><th>Teigiamų Δ</th></tr></thead><tbody id="v88rows"></tbody></table></div>
+<h3>V8.8 santrauka</h3>
+<div style="overflow-x:auto"><table><thead><tr><th>Rodiklis</th><th>Rezultatas</th></tr></thead><tbody id="v88summary"></tbody></table></div>
+<div id="v88verdict" class="note" style="margin-top:14px"></div>
+</section>
+<script>
+(function(){
+function d88(){return [40,80,120,180].map(function(w){return {win:w,name:'zone '+w}})}
+function r88(hist,n,c){var o=[],i,j,q,L=hist.length,st=Math.max(1,L-c.win),last=hist[L-1]?hist[L-1].euro:[];for(i=0;i<n;i++)o[i]=0;var zones=3,z=Math.ceil(n/zones),active=[];for(i=0;i<zones;i++)active[i]=0;for(q=0;q<last.length;q++)active[Math.min(zones-1,Math.floor((last[q]-1)/z))]++;for(j=st;j<L;j++){var a=hist[j-1].euro,b=hist[j].euro,zw=0;for(q=0;q<a.length;q++){var zi=Math.min(zones-1,Math.floor((a[q]-1)/z));if(active[zi])zw+=active[zi]}if(zw)for(var x=0;x<b.length;x++)if(b[x]<=n)o[b[x]-1]+=zw}return o}
+function one88(t,c){var n=12,k=2,rb=[],p;for(var i=0;i<n;i++)rb[i]=k/n;p=v5prob(r88(draws.slice(0,t),n,c),k,.20);return {date:draws[t].date,db:brier(rb,draws[t].euro)-brier(p,draws[t].euro),pct:pct(p,draws[t].euro)}}
+function mean88(a,key){var s=0;for(var i=0;i<a.length;i++)s+=key?a[i][key]:a[i];return a.length?s/a.length:0}
+function rng88(seed){var x=seed>>>0;return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return (x>>>0)/4294967296}}
+function signP88(v,iters){var R=rng88(880029),obs=mean88(v),ge=0;for(var z=0;z<iters;z++){var s=0;for(var i=0;i<v.length;i++)s+=(R()<.5?-1:1)*v[i];if(s/v.length>=obs-1e-15)ge++}return (ge+1)/(iters+1)}
+function blockCI88(v,iters,bs){var R=rng88(880031),n=v.length,out=[];for(var z=0;z<iters;z++){var a=[];while(a.length<n){var st=Math.floor(R()*Math.max(1,n-bs+1));for(var j=0;j<bs&&a.length<n;j++)a.push(v[st+j])}out.push(mean88(a))}out.sort(function(a,b){return a-b});return [out[Math.floor(.025*(out.length-1))],out[Math.floor(.975*(out.length-1))]]}
+window.runV88=function(){var btn=el('v88run'),t0=performance.now();btn.disabled=true;el('v88status').innerHTML='<b>VYKSTA…</b> užšaldomas modelis ir atliekamas 2023–2026 walk-forward testas.';setTimeout(function(){try{
+var cutoff='2023-01-01',start=0;while(start<draws.length&&draws[start].date<cutoff)start++;if(start<181)throw new Error('Per mažai pre-2023 duomenų.');
+var pool=d88(),rank=[];for(var q=0;q<pool.length;q++){var tr=[];for(var t=180;t<start;t++)tr.push(one88(t,pool[q]));rank.push({cfg:pool[q],z:v5score(tr)})}rank.sort(function(a,b){return b.z.db-a.z.db||b.z.pct-a.z.pct});var frozen=rank[0].cfg;
+var test=[];for(t=start;t<draws.length;t++)test.push(one88(t,frozen));var vals=test.map(function(x){return x.db}),avg=mean88(vals),mp=mean88(test,'pct'),pos=test.filter(function(x){return x.db>0}).length,pv=signP88(vals,9999),ci=blockCI88(vals,4999,8);
+var years={},rows='';for(var i=0;i<test.length;i++){var y=test[i].date.slice(0,4);(years[y]||(years[y]=[])).push(test[i])}Object.keys(years).sort().forEach(function(y){var a=years[y],d=mean88(a,'db'),pc=mean88(a,'pct'),po=a.filter(function(x){return x.db>0}).length;rows+='<tr><td><b>'+y+'</b></td><td>'+a.length+'</td><td>'+f4(d)+'</td><td>'+(pc*100).toFixed(1)+'%</td><td>'+po+'/'+a.length+'</td></tr>'});
+el('v88rows').innerHTML=rows;el('v88model').textContent=frozen.name;el('v88n').textContent=test.length;el('v88delta').textContent=f4(avg);el('v88pct').textContent=(mp*100).toFixed(1)+'%';el('v88ci').textContent=f4(ci[0])+' → '+f4(ci[1]);el('v88p').textContent=pv.toFixed(4);
+el('v88audit').innerHTML='<b>AUDITAS:</b> <span class="good">2023–2026 dalis neliečiama modelio parinkimo metu.</span><br>Vienas zone langas pasirenkamas tik iš prognozių iki 2022-12-31. Nuo 2023-01-01 kiekviena prognozė daroma tik iš tuo momentu jau buvusių traukimų. Testo metu modelis neperrenkamas. Δ &gt; 0 reiškia geriau už vienodų EURO numerių bazinį modelį; Δ &lt; 0 — blogiau.';
+el('v88summary').innerHTML='<tr><td>Mokymo / pasirinkimo pabaiga</td><td>2022-12-31</td></tr><tr><td>Nepaliestas walk-forward periodas</td><td>'+test[0].date+' → '+test[test.length-1].date+'</td></tr><tr><td>Užšaldytas modelis</td><td>'+frozen.name+'</td></tr><tr><td>Vidutinis Δ prieš bazinį modelį</td><td>'+f4(avg)+'</td></tr><tr><td>95% block-bootstrap CI</td><td>'+f4(ci[0])+' → '+f4(ci[1])+'</td></tr><tr><td>Vienpusis sign-flip p, H1: Δ&gt;0</td><td>'+pv.toFixed(4)+'</td></tr><tr><td>Teigiamų individualių Δ</td><td>'+pos+'/'+test.length+'</td></tr>';
+var verdict;if(avg>0&&ci[0]>0&&pv<=.05)verdict='<b class="good">OUT-OF-SAMPLE PROGNOZINĖ VERTĖ PATVIRTINTA ŠIAME TESTE.</b><br>Užšaldytas pre-2023 modelis 2023–2026 laikotarpiu vidutiniškai lenkia vienodą bazinį modelį, o neapibrėžtumo intervalas lieka virš nulio.';else if(avg>0)verdict='<b class="warn">TEIGIAMAS VIDURKIS, BET PATIKIMO PRANAŠUMO NEPATVIRTINA.</b><br>Walk-forward Δ yra teigiamas, tačiau statistinė kontrolė nepakankama. Tai nėra pagrindas laikyti modelį turinčiu stabilų prognozinį pranašumą.';else verdict='<b class="warn">2023–2026 PROGNOZINIS PRANAŠUMAS NEPATVIRTINTAS.</b><br>Užšaldytas modelis šiame tikrai vėlesniame walk-forward periode vidutiniškai neaplenkia vienodo bazinio modelio. Istorinis režimo lūžis gali būti realus aprašomasis reiškinys, bet tai savaime nesuteikia ateities traukimų prognozavimo pranašumo.';el('v88verdict').innerHTML=verdict;
+el('v88status').innerHTML='<b class="good">BAIGTA ✓</b> — '+test.length+' tikrai vėlesnių prognozių; 9 999 sign-flip + 4 999 block-bootstrap iteracijos; '+((performance.now()-t0)/1000).toFixed(3)+' s.';
+}catch(err){el('v88status').innerHTML='<b class="bad">KLAIDA:</b> '+String(err.message||err)}btn.disabled=false},50)};
+})();
+</script>
+
 </body></html>
