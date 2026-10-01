@@ -829,4 +829,71 @@ el('v86status').innerHTML='<b class="good">BAIGTA ✓</b> — '+blocks.length+' 
 })();
 </script>
 
+
+<section class="card" id="v87lab">
+<h2>18. OMEGA V8.7 — EURO lūžio lokalizacijos robustumo testas</h2>
+<p class="muted">Tikrina, ar V8.6 aptiktas režimo lūžis išlieka pakeitus nepersidengiančio bloko dydį. Kandidatas užšaldomas tik pagal pre-HOLDOUT istoriją. Kiekvienam bloko dydžiui lūžio vieta ieškoma iš naujo tik pre-HOLDOUT dalyje, o galutinis HOLDOUT lieka izoliuotas.</p>
+<button class="v5btn" id="v87run" onclick="runV87()">Paleisti V8.7 robustumo testą</button>
+<div id="v87status" class="notice" style="margin-top:14px"><b>LOCKED</b> — V8.7 dar nepaleistas.</div>
+<div class="v5grid" style="margin-top:18px">
+<div class="v5card"><div class="muted">Užšaldytas kandidatas</div><div class="v5big" id="v87best">—</div></div>
+<div class="v5card"><div class="muted">Testuojamų blokų dydžių</div><div class="v5big" id="v87sizes">7</div></div>
+<div class="v5card"><div class="muted">p≤0.05 robustūs testai</div><div class="v5big" id="v87sig">—</div></div>
+</div>
+<div class="v5grid" style="margin-top:12px">
+<div class="v5card"><div class="muted">Mediana lūžio data</div><div class="v5big" id="v87median">—</div></div>
+<div class="v5card"><div class="muted">Lūžio datų diapazonas</div><div class="v5big" id="v87range">—</div></div>
+<div class="v5card"><div class="muted">HOLDOUT Δ</div><div class="v5big" id="v87hold">—</div></div>
+</div>
+<div id="v87audit" class="notice" style="margin-top:12px"><b>AUDITAS:</b> dar nepaleistas.</div>
+<h3>Robustumas pagal bloko dydį</h3>
+<div class="v5table"><table><thead><tr><th>Bloko dydis</th><th>Blokų N</th><th>Lūžio data</th><th>Prieš Δ</th><th>Po Δ</th><th>Skirtumas</th><th>Perm. p</th><th>Kryptis</th></tr></thead><tbody id="v87rows"></tbody></table></div>
+<h3>V8.7 santrauka</h3>
+<div class="v5table"><table><thead><tr><th>Rodiklis</th><th>Rezultatas</th></tr></thead><tbody id="v87summary"></tbody></table></div>
+<div id="v87verdict" class="notice"><b class="warn">TESTAS DAR NEPALEISTAS.</b></div>
+</section>
+<script>
+(function(){
+function d87(){return [40,80,120,180].map(function(w){return {type:'zone',win:w,name:'zone '+w}})}
+function r87(hist,n,c){var o=[],i,j,q,L=hist.length,st=Math.max(1,L-c.win),last=hist[L-1]?hist[L-1].euro:[];for(i=0;i<n;i++)o[i]=0;var zones=3,z=Math.ceil(n/zones),active=[];for(i=0;i<zones;i++)active[i]=0;for(q=0;q<last.length;q++)active[Math.min(zones-1,Math.floor((last[q]-1)/z))]++;for(j=st;j<L;j++){var a=hist[j-1].euro,b=hist[j].euro,zw=0;for(q=0;q<a.length;q++){var zi=Math.min(zones-1,Math.floor((a[q]-1)/z));if(active[zi])zw+=active[zi]}if(zw)for(var x=0;x<b.length;x++)if(b[x]<=n)o[b[x]-1]+=zw}return o}
+function e87(c){var A=[],rb=[],n=12,k=2;for(var i=0;i<n;i++)rb[i]=k/n;for(var t=180;t<draws.length;t++){var p=v5prob(r87(draws.slice(0,t),n,c),k,.20);A.push({date:draws[t].date,db:brier(rb,draws[t].euro)-brier(p,draws[t].euro),pct:pct(p,draws[t].euro)})}return A}
+function m87(a){var s=0;for(var i=0;i<a.length;i++)s+=a[i];return a.length?s/a.length:0}
+function stat87(v,c){return Math.abs(m87(v.slice(0,c))-m87(v.slice(c)))}
+function rng87(seed){var x=seed>>>0;return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return (x>>>0)/4294967296}}
+function pp87(v,obs,iters,seed){var R=rng87(seed),ge=0,n=v.length;for(var z=0;z<iters;z++){var b=v.slice();for(var i=n-1;i>0;i--){var j=Math.floor(R()*(i+1)),tmp=b[i];b[i]=b[j];b[j]=tmp}var best=0;for(var c=2;c<=n-2;c++){var st=stat87(b,c);if(st>best)best=st}if(best>=obs-1e-15)ge++}return (ge+1)/(iters+1)}
+function blocks87(series,hs,BS){var a=[],s=0;while(s<hs){var e=Math.min(hs,s+BS);if(e-s>=Math.max(20,Math.floor(BS*.5)))a.push({s:s,e:e,z:v5score(series.slice(s,e))});s=e}return a}
+function medDate87(ds){var a=ds.slice().sort();return a[Math.floor((a.length-1)/2)]||'—'}
+window.runV87=function(){var btn=el('v87run'),t0=performance.now();btn.disabled=true;el('v87status').innerHTML='<b>VYKSTA…</b> tikrinami 7 nepriklausomi segmentavimo masteliai.';
+setTimeout(function(){try{
+var sizes=[40,45,50,57,65,75,90],pool=d87().map(function(c){return {cfg:c,s:e87(c)}}),N=pool[0].s.length,hs=Math.floor(N*.85);
+var ranked=pool.map(function(x){return {x:x,pre:v5score(x.s.slice(0,hs))}}).sort(function(a,b){return b.pre.db-a.pre.db||b.pre.pct-a.pre.pct});
+var frozen=ranked[0],series=frozen.x.s,hold=v5score(series.slice(hs)),res=[];
+for(var q=0;q<sizes.length;q++){
+ var BS=sizes[q],bl=blocks87(series,hs,BS),vals=bl.map(function(b){return b.z.db}),cut=0,bst=-1;
+ if(bl.length<4){res.push({BS:BS,blocks:bl,valid:false});continue}
+ for(var c=2;c<=bl.length-2;c++){var st=stat87(vals,c);if(st>bst){bst=st;cut=c}}
+ var before=m87(vals.slice(0,cut)),after=m87(vals.slice(cut)),p=pp87(vals,bst,4999,870000+BS*97),cp=bl[cut]?series[bl[cut].s].date:'—';
+ res.push({BS:BS,blocks:bl,valid:true,cut:cut,cp:cp,before:before,after:after,diff:bst,p:p,dir:before>0&&after<0});
+}
+var valid=res.filter(function(x){return x.valid}),sig=valid.filter(function(x){return x.dir&&x.p<=.05}),dates=valid.filter(function(x){return x.dir}).map(function(x){return x.cp}),rows='';
+for(var i=0;i<res.length;i++){var x=res[i];if(!x.valid){rows+='<tr><td>'+x.BS+'</td><td>'+x.blocks.length+'</td><td colspan="6">Per mažai blokų patikimam change-point testui</td></tr>';continue}
+rows+='<tr><td><b>'+x.BS+'</b></td><td>'+x.blocks.length+'</td><td>'+x.cp+'</td><td>'+f4(x.before)+'</td><td>'+f4(x.after)+'</td><td>'+f4(x.diff)+'</td><td>'+x.p.toFixed(4)+'</td><td>'+(x.dir?'<b class="good">+ → −</b>':'<span class="warn">kita</span>')+'</td></tr>'}
+el('v87rows').innerHTML=rows;
+var sortedDates=dates.slice().sort(),range=sortedDates.length?(sortedDates[0]+' → '+sortedDates[sortedDates.length-1]):'—',median=medDate87(dates);
+el('v87best').textContent=frozen.x.cfg.name;el('v87sizes').textContent=sizes.length;el('v87sig').textContent=sig.length+'/'+valid.length;el('v87median').textContent=median;el('v87range').textContent=range;el('v87hold').textContent=f4(hold.db);
+var near2022=dates.filter(function(d){return d>='2021-01-01'&&d<='2023-12-31'}).length;
+el('v87summary').innerHTML='<tr><td>Testuoti nepersidengiančių blokų dydžiai</td><td>'+sizes.join(', ')+'</td></tr><tr><td>Teigiamas → neigiamas krypties lūžis</td><td>'+dates.length+'/'+valid.length+'</td></tr><tr><td>p≤0.05 ir +→−</td><td>'+sig.length+'/'+valid.length+'</td></tr><tr><td>Lūžio datų mediana / diapazonas</td><td>'+median+' / '+range+'</td></tr><tr><td>2021–2023 intervale esančios lūžio datos</td><td>'+near2022+'/'+dates.length+'</td></tr><tr><td>Galutinis nepaliestas HOLDOUT</td><td>Δ '+f4(hold.db)+' / '+(hold.pct*100).toFixed(1)+'%</td></tr>';
+el('v87audit').innerHTML='<b>AUDITAS:</b> <span class="good">HOLDOUT izoliuotas.</span><br>Vienas EURO zone kandidatas užšaldomas pagal visą pre-HOLDOUT dalį. Tada tas pats kandidatas tikrinamas su 40, 45, 50, 57, 65, 75 ir 90 prognozių nepersidengiančiais blokais. Kiekvienam dydžiui lūžio vieta parenkama iš naujo tik pre-HOLDOUT dalyje ir atliekamos 4 999 permutacijos, kuriose lūžio vieta taip pat optimizuojama iš naujo.';
+if(sig.length>=5 && dates.length>=6 && near2022>=Math.ceil(dates.length*.7) && hold.db<0){
+ el('v87verdict').innerHTML='<b class="good">LŪŽIS ROBUSTUS SEGMENTAVIMO DYDŽIUI.</b><br>Daugumoje nepriklausomų segmentavimo mastelių išlieka teigiamas → neigiamas Δ lūžis, statistinė kontrolė dažniausiai p≤0.05, lūžio datos koncentruojasi panašiame istoriniame intervale, o nepaliestas HOLDOUT išlieka neigiamas.';
+}else if(dates.length>=5 && near2022>=Math.ceil(dates.length*.6)){
+ el('v87verdict').innerHTML='<b class="warn">LŪŽIO VIETA PANAŠI, BET STATISTINIS ROBUSTUMAS NEPILNAS.</b><br>Krypties pasikeitimas kartojasi keliuose segmentavimo masteliuose, tačiau nepakankamai daug jų praeina p≤0.05 kontrolę. Rezultatą vertink kaip struktūrinį požymį, o ne stabilų patvirtinimą.';
+}else{
+ el('v87verdict').innerHTML='<b class="warn">V8.6 LŪŽIS NĖRA ROBUSTUS BLOKO DYDŽIUI.</b><br>Pakeitus nepriklausomų blokų dydį lūžio vieta arba kryptis smarkiai keičiasi. Tai rodytų, kad V8.6 rezultatas galėjo priklausyti nuo 57 prognozių segmentavimo.';
+}
+el('v87status').innerHTML='<b class="good">BAIGTA ✓</b> — '+sizes.length+' blokų dydžiai; po 4 999 permutacijas kiekvienam tinkamam testui; '+((performance.now()-t0)/1000).toFixed(3)+' s.';
+}catch(err){el('v87status').innerHTML='<b class="bad">KLAIDA:</b> '+String(err.message||err)}btn.disabled=false},50)};
+})();
+</script>
+
 </body></html>
