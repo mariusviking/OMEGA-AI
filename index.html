@@ -457,7 +457,7 @@ window.runV7=function(){
 
 
 <section class="card" id="v8lab">
-<h2>13. OMEGA V8 — Walk-Forward Stability Test</h2>
+<h2>13. OMEGA V8.1 — Walk-Forward Stability Test</h2>
 <p class="muted">V8 tikrina tas pačias iš anksto apibrėžtas struktūrinių signalų šeimas per daug nuoseklių chronologinių, anksčiau nematytų laikotarpių. Kiekviename lange modelis naudoja tik iki to momento buvusią istoriją. Kandidatai reitinguojami pagal ankstesnius langus; paskutinis langas paliekamas galutiniam HOLDOUT. Permutacijos atliekamos tik kandidatams, kurie išgyvena stabilumo vartus.</p>
 <button class="v5btn" id="v8run" onclick="runV8()">Paleisti V8 Walk-Forward tyrimą</button>
 <div id="v8status" class="notice" style="margin-top:14px"><b>LOCKED</b> — V8 dar nepaleistas.</div>
@@ -485,7 +485,7 @@ function v8raw(hist,n,key,c){var o=[],i,j,q,L=hist.length,st=Math.max(1,L-c.win)
  else if(c.type==='neighbor'){for(j=st;j<L;j++){var a2=hist[j-1][key],b2=hist[j][key];for(q=0;q<a2.length;q++)if(last.indexOf(a2[q])>=0)for(var r2=0;r2<b2.length;r2++)if(Math.abs(b2[r2]-a2[q])<=2&&b2[r2]<=n)o[b2[r2]-1]++}}
  else if(c.type==='pairlink'){for(j=st;j<L;j++){var a3=hist[j-1][key],b3=hist[j][key],hit=0;for(q=0;q<a3.length;q++)if(last.indexOf(a3[q])>=0)hit++;var pairHits=hit>=2?(hit*(hit-1))/2:0;if(pairHits)for(var r3=0;r3<b3.length;r3++)if(b3[r3]<=n)o[b3[r3]-1]+=pairHits}}
  else if(c.type==='zone'){var zones=key==='numbers'?5:3,z=Math.ceil(n/zones),zc=[];for(i=0;i<zones;i++)zc[i]=0;for(q=0;q<last.length;q++)zc[Math.min(zones-1,Math.floor((last[q]-1)/z))]++;for(i=1;i<=n;i++)o[i-1]=zc[Math.min(zones-1,Math.floor((i-1)/z))]}
- else {var gaps=[];for(q=1;q<last.length;q++)gaps.push(last[q]-last[q-1]);var gm=gaps.length?gaps.reduce(function(a,b){return a+b},0)/gaps.length:0;for(i=1;i<=n;i++){var best=99;for(q=0;q<last.length;q++)best=Math.min(best,Math.abs(Math.abs(i-last[q])-gm));o[i-1]=-best}}return o}
+ else {var gmax=n-1,gfreq=[],gsum=0,gcnt=0,gg,d;for(i=0;i<=gmax;i++)gfreq[i]=0;for(j=st;j<L;j++){var row=hist[j][key].slice().sort(function(a,b){return a-b});for(q=1;q<row.length;q++){gg=row[q]-row[q-1];if(gg>=1&&gg<=gmax){gfreq[gg]++;gsum+=gg;gcnt++}}}var gmean=gcnt?gsum/gcnt:0;for(i=1;i<=n;i++){var sc=0;for(q=0;q<last.length;q++){d=Math.abs(i-last[q]);if(d>=1&&d<=gmax)sc+=gfreq[d]/Math.max(1,gcnt)}if(gmean>0){var best=99;for(q=0;q<last.length;q++)best=Math.min(best,Math.abs(Math.abs(i-last[q])-gmean));sc-=best*1e-6}o[i-1]=sc}}return o}
 function v8eval(ds,c,key,n,k,start){var A=[],rb=[],t,i,p;for(i=0;i<n;i++)rb[i]=k/n;for(t=start;t<ds.length;t++){p=v5prob(v8raw(ds.slice(0,t),n,key,c),k,.20);A.push({date:ds[t].date,db:brier(rb,ds[t][key])-brier(p,ds[t][key]),pct:pct(p,ds[t][key]),p:p,actual:ds[t][key].slice()})}return A}
 function v8mean(a){if(!a.length)return 0;var s=0;for(var i=0;i<a.length;i++)s+=a[i];return s/a.length}
 function v8median(a){if(!a.length)return 0;var b=a.slice().sort(function(x,y){return x-y}),m=Math.floor(b.length/2);return b.length%2?b[m]:(b[m-1]+b[m])/2}
@@ -535,7 +535,8 @@ window.runV8=function(){
    var elapsed=performance.now()-t0;
    el('v8time').textContent=(elapsed/1000).toFixed(3)+' s';el('v8evals').textContent=evalCount.toLocaleString('lt-LT');el('v8perms').textContent=permCount.toLocaleString('lt-LT');
    var foldNs=show.length?show[0].folds.map(function(x){return x.n}).join(', '):'—';
-   el('v8audit').innerHTML='<b>AUDITAS:</b> <span class="good">chronologinis testas be ateities informacijos.</span><br>Etapai: '+res.length+' kandidatų → '+stable.length+' stabilūs → '+hold.length+' teigiamas HOLDOUT → '+final.length+' p≤0.05 finalistų.<br>Stabilumo taisyklė: ≥67% teigiamų langų + teigiamas WF vidurkis + teigiama WF mediana. Paskutiniai 15% prognozių palikti HOLDOUT. Permutacijos: 4 999 tik HOLDOUT išgyvenusiems kandidatams.<br>Walk-forward langų dydžiai (pavyzdys): '+foldNs+'.';
+   var gapDiag=[];['MAIN','EURO'].forEach(function(D){var gs=res.filter(function(x){return x.domain===D&&x.cfg.type==='gapshape'});for(var a=0;a<gs.length;a++)for(var b=a+1;b<gs.length;b++){var same=gs[a].s.length===gs[b].s.length;if(same)for(var u=0;u<gs[a].s.length;u++){if(Math.abs(gs[a].s[u].db-gs[b].s[u].db)>1e-12){same=false;break}}if(same)gapDiag.push(D+' '+gs[a].cfg.win+'/'+gs[b].cfg.win)}});
+   el('v8audit').innerHTML='<b>AUDITAS:</b> <span class="good">chronologinis testas be ateities informacijos.</span><br>Etapai: '+res.length+' kandidatų → '+stable.length+' stabilūs → '+hold.length+' teigiamas HOLDOUT → '+final.length+' p≤0.05 finalistų.<br>Stabilumo taisyklė: ≥67% teigiamų langų + teigiamas WF vidurkis + teigiama WF mediana. Paskutiniai 15% prognozių palikti HOLDOUT. Permutacijos: 4 999 tik HOLDOUT išgyvenusiems kandidatams.<br>Walk-forward langų dydžiai (pavyzdys): '+foldNs+'.<br>Gapshape langų savikontrolė: '+(gapDiag.length?'<span class="bad">KLAIDA — identiškos serijos: '+gapDiag.join(', ')+'</span>':'<span class="good">PRAĖJO — 40/80/120/180 nėra identiškos serijos.</span>');
    el('v8status').innerHTML='<b class="good">BAIGTA ✓</b> — '+res.length+' kandidatų; '+evalCount.toLocaleString('lt-LT')+' prognozių įvertinimų; realiai '+permCount.toLocaleString('lt-LT')+' permutacijų; '+(elapsed/1000).toFixed(3)+' s.';
  }catch(e){el('v8status').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e)}btn.disabled=false},50)
 };
