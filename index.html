@@ -1,4 +1,4 @@
-<!doctype html><html lang="lt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMEGA V7 — Structural Dependency Research</title><style>
+<!doctype html><html lang="lt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMEGA V8.3 — Nested Walk-Forward Audit</title><style>
 :root{--bg:#06111f;--card:#10233d;--card2:#091827;--line:#294766;--text:#eef5ff;--muted:#9fb2cf;--green:#68e2b6;--yellow:#ffd45d;--red:#ff5b61;--blue:#79b8ff}
 *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#071524,#030b14);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .wrap{max-width:1180px;margin:auto;padding:18px}.hero,.card{background:linear-gradient(180deg,#122642,#0d2037);border:1px solid var(--line);border-radius:22px;padding:22px;margin:14px 0;box-shadow:0 12px 35px #0004}
@@ -539,6 +539,71 @@ window.runV8=function(){
    el('v8audit').innerHTML='<b>AUDITAS:</b> <span class="good">chronologinis testas be ateities informacijos.</span><br>Etapai: '+res.length+' kandidatų → '+stable.length+' stabilūs → '+hold.length+' teigiamas HOLDOUT → '+final.length+' p≤0.05 finalistų.<br>Stabilumo taisyklė: ≥67% teigiamų langų + teigiamas WF vidurkis + teigiama WF mediana. Paskutiniai 15% prognozių palikti HOLDOUT. Permutacijos: 4 999 tik HOLDOUT išgyvenusiems kandidatams.<br>Walk-forward langų dydžiai (pavyzdys): '+foldNs+'.<br>Pilna langų savikontrolė (lyginama visa prognozių tikimybių ir Δ serija):<br>'+auditLines.join(' · ')+'<br>Bendras rezultatas: '+(auditDup.length?'<span class="bad">REIKIA TIKRINTI — rasta identiškų skirtingų langų porų: '+auditDup.join(', ')+'</span>':'<span class="good">PRAĖJO — nė viena skirtingų 40/80/120/180 langų pora nėra identiška.</span>');
    el('v8status').innerHTML='<b class="good">BAIGTA ✓</b> — '+res.length+' kandidatų; '+evalCount.toLocaleString('lt-LT')+' prognozių įvertinimų; realiai '+permCount.toLocaleString('lt-LT')+' permutacijų; '+(elapsed/1000).toFixed(3)+' s.';
  }catch(e){el('v8status').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e)}btn.disabled=false},50)
+};
+})();
+</script>
+
+
+<section class="card" id="v83lab">
+<h2>14. OMEGA V8.3 — Nested Walk-Forward Selection Audit</h2>
+<p class="muted">Griežtesnis procedūros testas: kiekviename išoriniame chronologiniame lange kandidatas parenkamas tik iš iki to momento jau matytų prognozių. Tik tada jis vertinamas kitame, atrankai nematytame lange. Paskutiniai 15% prognozių lieka visiškai nepaliestas HOLDOUT. HOLDOUT nenaudojamas nei kandidatui, nei slenksčiams parinkti.</p>
+<button class="v5btn" id="v83run" onclick="runV83()">Paleisti V8.3 Nested Walk-Forward auditą</button>
+<div id="v83status" class="notice" style="margin-top:14px"><b>LOCKED</b> — V8.3 dar nepaleistas.</div>
+<div class="v5grid" style="margin-top:18px">
+ <div class="v5card"><div class="muted">Kandidatų</div><div class="v5big" id="v83cand">—</div></div>
+ <div class="v5card"><div class="muted">Išorinių testų</div><div class="v5big" id="v83folds">—</div></div>
+ <div class="v5card"><div class="muted">Teigiami išoriniai testai</div><div class="v5big" id="v83positive">—</div></div>
+</div>
+<div class="v5grid" style="margin-top:12px">
+ <div class="v5card"><div class="muted">HOLDOUT praėjo</div><div class="v5big" id="v83hold">—</div></div>
+ <div class="v5card"><div class="muted">Tikras skaičiavimo laikas</div><div class="v5big" id="v83time">—</div></div>
+ <div class="v5card"><div class="muted">Realiai atlikta permutacijų</div><div class="v5big" id="v83perms">—</div></div>
+</div>
+<div id="v83audit" class="notice" style="margin-top:12px"><b>AUDITAS:</b> dar nepaleistas.</div>
+<h3>Nested Walk-Forward išoriniai testai</h3>
+<div class="v5table"><table><thead><tr><th>Sritis</th><th>Testo langas</th><th>Pagal TRAIN parinktas kandidatas</th><th>TRAIN N</th><th>TEST N</th><th>TEST Δ</th><th>TEST pct</th><th>Rezultatas</th></tr></thead><tbody id="v83rows"></tbody></table></div>
+<h3>Galutinis nepaliestas HOLDOUT</h3>
+<div class="v5table"><table><thead><tr><th>Sritis</th><th>Užšaldytas kandidatas</th><th>Pre-HOLDOUT Δ</th><th>Pre-HOLDOUT pct</th><th>HOLDOUT Δ</th><th>HOLDOUT pct</th><th>Perm. p</th><th>Verdiktas</th></tr></thead><tbody id="v83holdrows"></tbody></table></div>
+<div id="v83verdict" class="notice"><b class="warn">JOKIO PATVIRTINTO NESTED WALK-FORWARD SIGNALO.</b></div>
+</section>
+<script>
+(function(){
+function v83defs(){var z=[],types=['transition','neighbor','pairlink','zone','gapshape'],wins=[40,80,120,180];for(var t=0;t<types.length;t++)for(var w=0;w<wins.length;w++)z.push({type:types[t],win:wins[w],name:types[t]+' '+wins[w]});return z}
+function v83raw(hist,n,key,c){var o=[],i,j,q,L=hist.length,st=Math.max(1,L-c.win),last=hist[L-1]?hist[L-1][key]:[];for(i=0;i<n;i++)o[i]=0;
+ if(c.type==='transition'){for(j=st;j<L;j++){var a=hist[j-1][key],b=hist[j][key];for(q=0;q<a.length;q++)if(last.indexOf(a[q])>=0)for(var r=0;r<b.length;r++)if(b[r]<=n)o[b[r]-1]++}}
+ else if(c.type==='neighbor'){for(j=st;j<L;j++){var a2=hist[j-1][key],b2=hist[j][key];for(q=0;q<a2.length;q++)if(last.indexOf(a2[q])>=0)for(var r2=0;r2<b2.length;r2++)if(Math.abs(b2[r2]-a2[q])<=2&&b2[r2]<=n)o[b2[r2]-1]++}}
+ else if(c.type==='pairlink'){for(j=st;j<L;j++){var a3=hist[j-1][key],b3=hist[j][key],hit=0;for(q=0;q<a3.length;q++)if(last.indexOf(a3[q])>=0)hit++;var pairHits=hit>=2?(hit*(hit-1))/2:0;if(pairHits)for(var r3=0;r3<b3.length;r3++)if(b3[r3]<=n)o[b3[r3]-1]+=pairHits}}
+ else if(c.type==='zone'){var zones=key==='numbers'?5:3,z=Math.ceil(n/zones),active=[];for(i=0;i<zones;i++)active[i]=0;for(q=0;q<last.length;q++)active[Math.min(zones-1,Math.floor((last[q]-1)/z))]++;for(j=st;j<L;j++){var za=hist[j-1][key],zb=hist[j][key],zw=0;for(q=0;q<za.length;q++){var zi=Math.min(zones-1,Math.floor((za[q]-1)/z));if(active[zi])zw+=active[zi]}if(zw)for(var zr=0;zr<zb.length;zr++)if(zb[zr]<=n)o[zb[zr]-1]+=zw}}
+ else {var gmax=n-1,gfreq=[],gsum=0,gcnt=0,gg,d;for(i=0;i<=gmax;i++)gfreq[i]=0;for(j=st;j<L;j++){var row=hist[j][key].slice().sort(function(a,b){return a-b});for(q=1;q<row.length;q++){gg=row[q]-row[q-1];if(gg>=1&&gg<=gmax){gfreq[gg]++;gsum+=gg;gcnt++}}}var gmean=gcnt?gsum/gcnt:0;for(i=1;i<=n;i++){var sc=0;for(q=0;q<last.length;q++){d=Math.abs(i-last[q]);if(d>=1&&d<=gmax)sc+=gfreq[d]/Math.max(1,gcnt)}if(gmean>0){var best=99;for(q=0;q<last.length;q++)best=Math.min(best,Math.abs(Math.abs(i-last[q])-gmean));sc-=best*1e-6}o[i-1]=sc}}return o}
+function v83eval(ds,c,key,n,k,start){var A=[],rb=[],t,i,p;for(i=0;i<n;i++)rb[i]=k/n;for(t=start;t<ds.length;t++){p=v5prob(v83raw(ds.slice(0,t),n,key,c),k,.20);A.push({date:ds[t].date,db:brier(rb,ds[t][key])-brier(p,ds[t][key]),pct:pct(p,ds[t][key]),p:p,actual:ds[t][key].slice()})}return A}
+function v83choose(pool,end){var best=null;for(var i=0;i<pool.length;i++){var seg=pool[i].s.slice(0,end);if(!seg.length)continue;var sc=v5score(seg);var obj={x:pool[i],sc:sc};if(!best||sc.db>best.sc.db||(sc.db===best.sc.db&&sc.pct>best.sc.pct))best=obj}return best}
+function v83bounds(len,count){var base=Math.floor(len/count),rem=len%count,pos=0,out=[];for(var i=0;i<count;i++){var sz=base+(i<rem?1:0);out.push([pos,pos+sz]);pos+=sz}return out}
+window.runV83=function(){
+ var btn=el('v83run'),t0=performance.now(),permCount=0;btn.disabled=true;el('v83status').innerHTML='<b>VYKSTA…</b> kiekviename lange kandidatų atranka atliekama iš naujo tik pagal praeitį.';el('v83audit').innerHTML='<b>AUDITAS VYKSTA…</b>';el('v83perms').textContent='0';
+ setTimeout(function(){try{
+  var cfg=v83defs(),startAt=180,outerCount=12,all=[],dom,key,n,k,i,scores,N,holdStart;
+  for(dom=0;dom<2;dom++){key=dom?'euro':'numbers';n=dom?12:50;k=dom?2:5;for(i=0;i<cfg.length;i++){scores=v83eval(draws,cfg[i],key,n,k,startAt);N=scores.length;holdStart=Math.floor(N*.85);all.push({domain:dom?'EURO':'MAIN',cfg:cfg[i],s:scores,holdStart:holdStart})}}
+  var rows='',holdRows='',outer=[],holdResults=[];
+  ['MAIN','EURO'].forEach(function(D){
+    var pool=all.filter(function(x){return x.domain===D}),hs=pool[0].holdStart,bounds=v83bounds(hs,outerCount);
+    for(var f=1;f<bounds.length;f++){
+      var trainEnd=bounds[f][0],testA=bounds[f][0],testB=bounds[f][1],pick=v83choose(pool,trainEnd);if(!pick)continue;
+      var test=v5score(pick.x.s.slice(testA,testB)),ok=test.db>0&&test.pct>.505;
+      outer.push({domain:D,fold:f,pick:pick.x.cfg.name,trainN:trainEnd,testN:testB-testA,test:test,ok:ok});
+    }
+    var finalPick=v83choose(pool,hs),pre=finalPick.sc,holdSeg=finalPick.x.s.slice(hs),hsc=v5score(holdSeg),pp=null,hok=hsc.db>0&&hsc.pct>.505;
+    if(hok){pp=v5permP(holdSeg,hsc.db,4999,83001+(D==='EURO'?911:0));permCount+=4999}
+    holdResults.push({domain:D,pick:finalPick.x.cfg.name,pre:pre,hs:hsc,pp:pp,ok:hok&&pp!=null&&pp<=.05});
+  });
+  for(i=0;i<outer.length;i++){var o=outer[i];rows+='<tr><td>'+o.domain+'</td><td>'+(o.fold)+'/'+(outerCount-1)+'</td><td><b>'+o.pick+'</b></td><td>'+o.trainN+'</td><td>'+o.testN+'</td><td>'+f4(o.test.db)+'</td><td>'+(o.test.pct*100).toFixed(1)+'%</td><td>'+(o.ok?'<b class="good">PASS</b>':'<span class="warn">NO</span>')+'</td></tr>'}
+  for(i=0;i<holdResults.length;i++){var h=holdResults[i];holdRows+='<tr><td>'+h.domain+'</td><td><b>'+h.pick+'</b></td><td>'+f4(h.pre.db)+'</td><td>'+(h.pre.pct*100).toFixed(1)+'%</td><td>'+f4(h.hs.db)+'</td><td>'+(h.hs.pct*100).toFixed(1)+'%</td><td>'+(h.pp==null?'—':h.pp.toFixed(4))+'</td><td>'+(h.ok?'<b class="good">PASS</b>':'<span class="warn">NO</span>')+'</td></tr>'}
+  var positive=outer.filter(function(x){return x.ok}).length,finals=holdResults.filter(function(x){return x.ok}).length,elapsed=performance.now()-t0;
+  el('v83rows').innerHTML=rows;el('v83holdrows').innerHTML=holdRows;el('v83cand').textContent=all.length;el('v83folds').textContent=outer.length;el('v83positive').textContent=positive+'/'+outer.length;el('v83hold').textContent=finals+'/'+holdResults.length;el('v83time').textContent=(elapsed/1000).toFixed(3)+' s';el('v83perms').textContent=permCount.toLocaleString('lt-LT');
+  var byDom=['MAIN','EURO'].map(function(D){var a=outer.filter(function(x){return x.domain===D}),p=a.filter(function(x){return x.ok}).length;return D+': '+p+'/'+a.length+' teigiamų išorinių testų'}).join(' · ');
+  el('v83audit').innerHTML='<b>AUDITAS:</b> <span class="good">tikra nested atranka be ateities informacijos.</span><br>Kiekvieno TEST lango kandidatas parinktas tik iš ankstesnių TRAIN prognozių. TEST rezultatas nedalyvauja to lango kandidato pasirinkime. Paskutiniai 15% palikti visiškai nepaliestam HOLDOUT.<br>'+byDom+'.<br>Galutiniam HOLDOUT kiekvienoje srityje kandidatas užšaldomas pagal visą pre-HOLDOUT istoriją. 4 999 permutacijos vykdomos tik jei HOLDOUT Δ&gt;0 ir pct&gt;50.5%.';
+  if(finals){el('v83verdict').innerHTML='<b class="good">NESTED WALK-FORWARD PROCEDŪRA TURI HOLDOUT IŠGYVENUSĮ KANDIDATĄ.</b><br>Tai vis tiek nėra būsimo laimėjimo garantija. Užšaldytą taisyklę reikia tikrinti naujuose būsimuose tiražuose nekeičiant atrankos procedūros.'}else{el('v83verdict').innerHTML='<b class="warn">PATIKIMO NESTED WALK-FORWARD SIGNALO NERASTA.</b><br>Po pakartotinės kandidatų atrankos tik iš praeities nė viena sritis nepraėjo galutinio nepaliesto HOLDOUT ir p≤0.05 grandinės.'}
+  el('v83status').innerHTML='<b class="good">BAIGTA ✓</b> — '+all.length+' kandidatų; '+outer.length+' išorinių testų; '+permCount.toLocaleString('lt-LT')+' realių permutacijų; '+(elapsed/1000).toFixed(3)+' s.';
+ }catch(e){el('v83status').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e)}btn.disabled=false},50)
 };
 })();
 </script>
