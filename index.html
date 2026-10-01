@@ -648,4 +648,131 @@ window.runV84=function(){var btn=el('v84run'),t0=performance.now();btn.disabled=
 })();
 </script>
 
+
+<section class="card" id="v85lab">
+<h2>16. OMEGA V8.5 — EURO režimo lūžio diagnostika</h2>
+<p class="muted">Diagnostika nekeičia V8.3/V8.4 atrankos taisyklių. Ji seka V8.4 pagal pre-HOLDOUT užšaldytą EURO zone kandidatą chronologiniais slenkančiais langais ir tikrina, ar signalas palaipsniui silpsta, ar juda ciklais. Galutinis HOLDOUT lieka tik patikrinimui.</p>
+<button class="v5btn" id="v85run" onclick="runV85()">Paleisti V8.5 režimo lūžio diagnostiką</button>
+<div id="v85status" class="notice" style="margin-top:14px"><b>LOCKED</b> — V8.5 dar nepaleistas.</div>
+
+<div class="v5grid" style="margin-top:18px">
+ <div class="v5card"><div class="muted">Užšaldytas kandidatas</div><div class="v5big" id="v85best">—</div></div>
+ <div class="v5card"><div class="muted">Slenkančio lango dydis</div><div class="v5big" id="v85win">—</div></div>
+ <div class="v5card"><div class="muted">Pre-HOLDOUT langų</div><div class="v5big" id="v85windows">—</div></div>
+</div>
+<div class="v5grid" style="margin-top:12px">
+ <div class="v5card"><div class="muted">Teigiami langai</div><div class="v5big" id="v85positive">—</div></div>
+ <div class="v5card"><div class="muted">Ženklo pasikeitimų</div><div class="v5big" id="v85flips">—</div></div>
+ <div class="v5card"><div class="muted">Silpnėjimo kryptis</div><div class="v5big" id="v85trend">—</div></div>
+</div>
+
+<div id="v85audit" class="notice" style="margin-top:12px"><b>AUDITAS:</b> dar nepaleistas.</div>
+
+<h3>Slenkantis chronologinis EURO profilis</h3>
+<div class="v5table"><table>
+<thead><tr><th>Langas</th><th>Periodas</th><th>N</th><th>Δ</th><th>pct</th><th>Kryptis</th></tr></thead>
+<tbody id="v85rows"></tbody></table></div>
+
+<h3>Režimo lūžio santrauka</h3>
+<div class="v5table"><table>
+<thead><tr><th>Rodiklis</th><th>Rezultatas</th></tr></thead>
+<tbody id="v85summary"></tbody></table></div>
+
+<div id="v85verdict" class="notice"><b class="warn">DIAGNOSTIKA DAR NEPALEISTA.</b></div>
+</section>
+
+<script>
+(function(){
+function v85defs(){return [40,80,120,180].map(function(w){return {type:'zone',win:w,name:'zone '+w}})}
+function v85raw(hist,n,key,c){var o=[],i,j,q,L=hist.length,st=Math.max(1,L-c.win),last=hist[L-1]?hist[L-1][key]:[];for(i=0;i<n;i++)o[i]=0;var zones=key==='numbers'?5:3,z=Math.ceil(n/zones),active=[];for(i=0;i<zones;i++)active[i]=0;for(q=0;q<last.length;q++)active[Math.min(zones-1,Math.floor((last[q]-1)/z))]++;for(j=st;j<L;j++){var za=hist[j-1][key],zb=hist[j][key],zw=0;for(q=0;q<za.length;q++){var zi=Math.min(zones-1,Math.floor((za[q]-1)/z));if(active[zi])zw+=active[zi]}if(zw)for(var zr=0;zr<zb.length;zr++)if(zb[zr]<=n)o[zb[zr]-1]+=zw}return o}
+function v85eval(c){var A=[],rb=[],t,p,n=12,k=2,startAt=180;for(var i=0;i<n;i++)rb[i]=k/n;for(t=startAt;t<draws.length;t++){p=v5prob(v85raw(draws.slice(0,t),n,'euro',c),k,.20);A.push({date:draws[t].date,db:brier(rb,draws[t].euro)-brier(p,draws[t].euro),pct:pct(p,draws[t].euro)})}return A}
+function sc(a){return v5score(a)}
+function dir(x){if(x.db>0&&x.pct>.505)return '<b class="good">teigiamas</b>';if(x.db<0&&x.pct<.5)return '<span class="warn">neigiamas</span>';return 'mišrus'}
+function fmtDate(s){return s||'—'}
+function linSlope(a){var n=a.length;if(n<2)return 0;var sx=0,sy=0,sxy=0,sxx=0;for(var i=0;i<n;i++){sx+=i;sy+=a[i];sxy+=i*a[i];sxx+=i*i}var d=n*sxx-sx*sx;return d?(n*sxy-sx*sy)/d:0}
+function corrLag(a,lag){if(a.length<=lag+2)return 0;var x=[],y=[];for(var i=lag;i<a.length;i++){x.push(a[i-lag]);y.push(a[i])}var mx=x.reduce((s,v)=>s+v,0)/x.length,my=y.reduce((s,v)=>s+v,0)/y.length,num=0,dx=0,dy=0;for(i=0;i<x.length;i++){var ax=x[i]-mx,ay=y[i]-my;num+=ax*ay;dx+=ax*ax;dy+=ay*ay}return dx&&dy?num/Math.sqrt(dx*dy):0}
+
+window.runV85=function(){
+ var btn=el('v85run'),t0=performance.now();btn.disabled=true;
+ el('v85status').innerHTML='<b>VYKSTA…</b> analizuojamas EURO signalo kitimas laike.';
+ setTimeout(function(){try{
+   var defs=v85defs(),pool=[],i;
+   for(i=0;i<defs.length;i++)pool.push({cfg:defs[i],s:v85eval(defs[i])});
+   var N=pool[0].s.length,hs=Math.floor(N*.85);
+   var ranked=pool.map(function(x){return {x:x,pre:sc(x.s.slice(0,hs))}});
+   ranked.sort(function(a,b){return b.pre.db-a.pre.db||b.pre.pct-a.pre.pct});
+   var frozen=ranked[0],series=frozen.x.s;
+
+   // 57 prognozių langas atitinka ankstesnio nested testo išorinio TEST dydį.
+   // Žingsnis 19 (~1/3 lango) leidžia matyti lūžio trajektoriją, bet nekuria naujos atrankos taisyklės.
+   var W=Math.min(57,Math.max(40,Math.floor(hs/8))),STEP=Math.max(10,Math.floor(W/3));
+   var windows=[];
+   for(var e=W;e<=hs;e+=STEP){
+      var s=e-W,z=sc(series.slice(s,e));
+      windows.push({s:s,e:e,z:z});
+   }
+   if(!windows.length || windows[windows.length-1].e!==hs){
+      var ss=Math.max(0,hs-W),zz=sc(series.slice(ss,hs));
+      if(!windows.length || windows[windows.length-1].s!==ss)windows.push({s:ss,e:hs,z:zz});
+   }
+
+   var rows='',dbs=[],pos=0,flips=0,lastSign=0;
+   for(i=0;i<windows.length;i++){
+      var w=windows[i],sg=w.z.db>0?1:(w.z.db<0?-1:0);
+      if(w.z.db>0)pos++;
+      if(lastSign&&sg&&sg!==lastSign)flips++;
+      if(sg)lastSign=sg;
+      dbs.push(w.z.db);
+      rows+='<tr><td>'+(i+1)+'</td><td>'+fmtDate(series[w.s].date)+' → '+fmtDate(series[w.e-1].date)+'</td><td>'+(w.e-w.s)+'</td><td>'+f4(w.z.db)+'</td><td>'+(w.z.pct*100).toFixed(1)+'%</td><td>'+dir(w.z)+'</td></tr>';
+   }
+
+   var slope=linSlope(dbs);
+   var first3=sc(series.slice(0,Math.floor(hs/3)));
+   var mid3=sc(series.slice(Math.floor(hs/3),Math.floor(2*hs/3)));
+   var late3=sc(series.slice(Math.floor(2*hs/3),hs));
+   var hold=sc(series.slice(hs));
+   var recent=windows.slice(Math.max(0,windows.length-3));
+   var recentMean=recent.reduce(function(s,w){return s+w.z.db},0)/recent.length;
+   var peak=Math.max.apply(null,dbs),trough=Math.min.apply(null,dbs);
+   var bestLag=0,bestCorr=-2;
+   for(var lag=1;lag<=Math.min(6,Math.floor(dbs.length/2));lag++){var c=corrLag(dbs,lag);if(c>bestCorr){bestCorr=c;bestLag=lag}}
+   var cyclic=(flips>=2 && bestCorr>0.35);
+   var weakening=(slope<0 && first3.db>mid3.db && mid3.db>late3.db);
+   var crossed=(late3.db<0 || recentMean<0);
+   var holdContinues=(hold.db<0 && crossed);
+
+   var summary='';
+   summary+='<tr><td>Linijinė Δ kryptis per slenkančius langus</td><td>'+f4(slope)+' / langą</td></tr>';
+   summary+='<tr><td>Ankstyva → vidurinė → vėlyva pre-HOLDOUT</td><td>'+f4(first3.db)+' → '+f4(mid3.db)+' → '+f4(late3.db)+'</td></tr>';
+   summary+='<tr><td>Geriausias → blogiausias slenkantis Δ</td><td>'+f4(peak)+' → '+f4(trough)+'</td></tr>';
+   summary+='<tr><td>Paskutinių 3 pre-HOLDOUT langų vid. Δ</td><td>'+f4(recentMean)+'</td></tr>';
+   summary+='<tr><td>Galutinis HOLDOUT Δ / pct</td><td>'+f4(hold.db)+' / '+(hold.pct*100).toFixed(1)+'%</td></tr>';
+   summary+='<tr><td>Cikliškumo indikatorius</td><td>'+(cyclic?'<b class="good">galimas cikliškumas</b>':'ryškaus cikliškumo nerasta')+(bestLag?' (lag '+bestLag+', r='+bestCorr.toFixed(2)+')':'')+'</td></tr>';
+
+   el('v85rows').innerHTML=rows;el('v85summary').innerHTML=summary;
+   el('v85best').textContent=frozen.x.cfg.name;el('v85win').textContent=W;
+   el('v85windows').textContent=windows.length;el('v85positive').textContent=pos+'/'+windows.length;
+   el('v85flips').textContent=flips;
+   el('v85trend').textContent=weakening?'silpnėja':(slope>0?'stiprėja':'mišri');
+
+   el('v85audit').innerHTML='<b>AUDITAS:</b> <span class="good">diagnostika be naujo kandidato parinkimo iš HOLDOUT.</span><br>Užšaldytas kandidatas „'+frozen.x.cfg.name+'“ parinktas tik pagal visą pre-HOLDOUT dalį, kaip V8.4. Slenkantys langai naudojami tik jo chronologiniam profiliui parodyti. HOLDOUT neįtrauktas nei į kandidato, nei į lango dydžio optimizavimą.';
+
+   var verdict;
+   if(weakening && crossed && holdContinues){
+      verdict='<b class="warn">NUOSEKLAUS EURO SIGNALO SILPNĖJIMO POŽYMIS.</b><br>Signalas silpnėja jau pre-HOLDOUT istorijoje, pereina į neigiamą zoną dar prieš galutinį HOLDOUT, o HOLDOUT tą kryptį pratęsia. Tai labiau atitinka palaipsnį režimo nykimą nei vienkartinį HOLDOUT atsitiktinumą.';
+   }else if(cyclic){
+      verdict='<b>GALIMAS CIKLINIS REŽIMAS.</b><br>Slenkančiuose languose matomi keli Δ ženklo pasikeitimai ir teigiama lag koreliacija. Tai diagnostinis požymis, ne įrodymas; HOLDOUT lieka nepriklausomas galutinis patikrinimas.';
+   }else if(slope<0){
+      verdict='<b class="warn">SILPNĖJIMO KRYPTIS YRA, BET LŪŽIS NĖRA VIENAREIKŠMIS.</b><br>Chronologinis Δ trendas neigiamas, tačiau profilis nėra pakankamai monotoniškas, kad jį būtų galima vadinti aiškiu palaipsniu nykimu.';
+   }else{
+      verdict='<b>AIŠKAUS REŽIMO LŪŽIO NERASTA.</b><br>Slenkantis chronologinis profilis nerodo nuoseklaus silpnėjimo ar pakankamai ryškaus cikliškumo.';
+   }
+   el('v85verdict').innerHTML=verdict;
+   el('v85status').innerHTML='<b class="good">BAIGTA ✓</b> — '+windows.length+' slenkančių pre-HOLDOUT langų; HOLDOUT '+(N-hs)+' prognozijos; '+((performance.now()-t0)/1000).toFixed(3)+' s.';
+ }catch(e){el('v85status').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e)}
+ btn.disabled=false},50)
+};
+})();
+</script>
+
 </body></html>
