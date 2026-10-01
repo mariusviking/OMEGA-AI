@@ -1,4 +1,4 @@
-<!doctype html><html lang="lt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMEGA V8.3 — Nested Walk-Forward Audit</title><style>
+<!doctype html><html lang="lt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMEGA V8.4 — EURO Stability Diagnostics</title><style>
 :root{--bg:#06111f;--card:#10233d;--card2:#091827;--line:#294766;--text:#eef5ff;--muted:#9fb2cf;--green:#68e2b6;--yellow:#ffd45d;--red:#ff5b61;--blue:#79b8ff}
 *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#071524,#030b14);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .wrap{max-width:1180px;margin:auto;padding:18px}.hero,.card{background:linear-gradient(180deg,#122642,#0d2037);border:1px solid var(--line);border-radius:22px;padding:22px;margin:14px 0;box-shadow:0 12px 35px #0004}
@@ -605,6 +605,46 @@ window.runV83=function(){
   el('v83status').innerHTML='<b class="good">BAIGTA ✓</b> — '+all.length+' kandidatų; '+outer.length+' išorinių testų; '+permCount.toLocaleString('lt-LT')+' realių permutacijų; '+(elapsed/1000).toFixed(3)+' s.';
  }catch(e){el('v83status').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e)}btn.disabled=false},50)
 };
+})();
+</script>
+
+
+<section class="card" id="v84lab">
+<h2>15. OMEGA V8.4 — EURO režimų ir stabilumo diagnostika</h2>
+<p class="muted">Diagnostika skirta paaiškinti, kodėl EURO signalas buvo teigiamas daugelyje nested išorinių langų, bet neišgyveno galutinio HOLDOUT. Ji nekeičia V8.3 atrankos taisyklių ir nenaudoja HOLDOUT naujam kandidatui parinkti.</p>
+<button class="v5btn" id="v84run" onclick="runV84()">Paleisti V8.4 EURO stabilumo diagnostiką</button>
+<div id="v84status" class="notice" style="margin-top:14px"><b>LOCKED</b> — V8.4 dar nepaleistas.</div>
+<div class="v5grid" style="margin-top:18px">
+ <div class="v5card"><div class="muted">Pre-HOLDOUT prognozių</div><div class="v5big" id="v84pre">—</div></div>
+ <div class="v5card"><div class="muted">HOLDOUT prognozių</div><div class="v5big" id="v84holdn">—</div></div>
+ <div class="v5card"><div class="muted">Stabiliausias zone langas</div><div class="v5big" id="v84best">—</div></div>
+</div>
+<div id="v84audit" class="notice" style="margin-top:12px"><b>AUDITAS:</b> dar nepaleistas.</div>
+<h3>EURO zone kandidatų chronologinis profilis</h3>
+<div class="v5table"><table><thead><tr><th>Kandidatas</th><th>Visa pre-HOLDOUT Δ</th><th>Pre pct</th><th>Ankstyva 1/3 Δ</th><th>Vidurinė 1/3 Δ</th><th>Vėlyva 1/3 Δ</th><th>HOLDOUT Δ</th><th>HOLDOUT pct</th></tr></thead><tbody id="v84zones"></tbody></table></div>
+<h3>Užšaldyto EURO kandidato režimų diagnostika</h3>
+<div class="v5table"><table><thead><tr><th>Periodas</th><th>N</th><th>Δ</th><th>pct</th><th>Vertinimas</th></tr></thead><tbody id="v84periods"></tbody></table></div>
+<div id="v84verdict" class="notice"><b class="warn">DIAGNOSTIKA DAR NEPALEISTA.</b></div>
+</section>
+<script>
+(function(){
+function v84defs(){return [40,80,120,180].map(function(w){return {type:'zone',win:w,name:'zone '+w}})}
+function v84raw(hist,n,key,c){var o=[],i,j,q,L=hist.length,st=Math.max(1,L-c.win),last=hist[L-1]?hist[L-1][key]:[];for(i=0;i<n;i++)o[i]=0;var zones=key==='numbers'?5:3,z=Math.ceil(n/zones),active=[];for(i=0;i<zones;i++)active[i]=0;for(q=0;q<last.length;q++)active[Math.min(zones-1,Math.floor((last[q]-1)/z))]++;for(j=st;j<L;j++){var za=hist[j-1][key],zb=hist[j][key],zw=0;for(q=0;q<za.length;q++){var zi=Math.min(zones-1,Math.floor((za[q]-1)/z));if(active[zi])zw+=active[zi]}if(zw)for(var zr=0;zr<zb.length;zr++)if(zb[zr]<=n)o[zb[zr]-1]+=zw}return o}
+function v84eval(c){var A=[],rb=[],t,p,n=12,k=2,startAt=180;for(var i=0;i<n;i++)rb[i]=k/n;for(t=startAt;t<draws.length;t++){p=v5prob(v84raw(draws.slice(0,t),n,'euro',c),k,.20);A.push({date:draws[t].date,db:brier(rb,draws[t].euro)-brier(p,draws[t].euro),pct:pct(p,draws[t].euro)})}return A}
+function sc(a){return v5score(a)}
+function thirdCuts(n){var a=Math.floor(n/3),b=Math.floor(2*n/3);return [[0,a],[a,b],[b,n]]}
+function label(x){if(x.db>0&&x.pct>.505)return '<b class="good">teigiamas</b>';if(x.db<0&&x.pct<.5)return '<span class="warn">neigiamas</span>';return 'mišrus'}
+window.runV84=function(){var btn=el('v84run'),t0=performance.now();btn.disabled=true;el('v84status').innerHTML='<b>VYKSTA…</b> skaidoma EURO istorija chronologiškai.';setTimeout(function(){try{
+ var defs=v84defs(),pool=[],i;for(i=0;i<defs.length;i++)pool.push({cfg:defs[i],s:v84eval(defs[i])});var N=pool[0].s.length,hs=Math.floor(N*.85),cuts=thirdCuts(hs),rows='';
+ var ranked=[];for(i=0;i<pool.length;i++){var x=pool[i],pre=sc(x.s.slice(0,hs)),h=sc(x.s.slice(hs)),parts=cuts.map(function(c){return sc(x.s.slice(c[0],c[1]))});ranked.push({x:x,pre:pre,h:h,parts:parts});rows+='<tr><td><b>'+x.cfg.name+'</b></td><td>'+f4(pre.db)+'</td><td>'+(pre.pct*100).toFixed(1)+'%</td><td>'+f4(parts[0].db)+'</td><td>'+f4(parts[1].db)+'</td><td>'+f4(parts[2].db)+'</td><td>'+f4(h.db)+'</td><td>'+(h.pct*100).toFixed(1)+'%</td></tr>'}
+ ranked.sort(function(a,b){return b.pre.db-a.pre.db||b.pre.pct-a.pre.pct});var frozen=ranked[0],series=frozen.x.s,periods=[['Pre-HOLDOUT ankstyva 1/3',cuts[0][0],cuts[0][1]],['Pre-HOLDOUT vidurinė 1/3',cuts[1][0],cuts[1][1]],['Pre-HOLDOUT vėlyva 1/3',cuts[2][0],cuts[2][1]],['Galutinis HOLDOUT',hs,N]],pr='';
+ for(i=0;i<periods.length;i++){var q=periods[i],z=sc(series.slice(q[1],q[2]));pr+='<tr><td>'+q[0]+'</td><td>'+(q[2]-q[1])+'</td><td>'+f4(z.db)+'</td><td>'+(z.pct*100).toFixed(1)+'%</td><td>'+label(z)+'</td></tr>'}
+ var late=frozen.parts[2],hold=frozen.h,flip=late.db>0&&hold.db<0;el('v84zones').innerHTML=rows;el('v84periods').innerHTML=pr;el('v84pre').textContent=hs;el('v84holdn').textContent=N-hs;el('v84best').textContent=frozen.x.cfg.name;
+ el('v84audit').innerHTML='<b>AUDITAS:</b> ši lentelė yra <span class="good">diagnostinė</span>. Kandidatas „'+frozen.x.cfg.name+'“ nustatytas tik pagal visą pre-HOLDOUT dalį. HOLDOUT parodytas tik kaip galutinis patikrinimas ir nėra naudojamas naujam parametrui parinkti.';
+ if(flip)el('v84verdict').innerHTML='<b class="warn">MATOMAS REŽIMO PASIKEITIMO POŽYMIS.</b><br>Pre-HOLDOUT pabaigoje užšaldyto '+frozen.x.cfg.name+' Δ buvo teigiamas ('+f4(late.db)+'), o galutiniame HOLDOUT tapo neigiamas ('+f4(hold.db)+'). Tai aprašo nestabilumą, bet savaime neįrodo statistinio struktūrinio lūžio.';
+ else el('v84verdict').innerHTML='<b>RYŠKAUS ŽENKLO APSIVERTIMO NERASTA.</b><br>Užšaldyto '+frozen.x.cfg.name+' vėlyvos pre-HOLDOUT dalies ir HOLDOUT Δ ženklai neapsivertė. Vertink visą chronologinį profilį, o ne vieną langą.';
+ el('v84status').innerHTML='<b class="good">BAIGTA ✓</b> — 4 EURO zone langai; '+N+' prognozių kiekvienam; '+((performance.now()-t0)/1000).toFixed(3)+' s.';
+ }catch(e){el('v84status').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e)}btn.disabled=false},50)};
 })();
 </script>
 
