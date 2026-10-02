@@ -1087,4 +1087,49 @@ window.runV90=function(){var btn=el('v90run'),t0=performance.now();btn.disabled=
 })();
 </script>
 
+
+<section class="card" id="v92">
+<h2>23. OMEGA V9.2 — EURO numerių Recent-Regime validacija</h2>
+<p class="muted">Tikslas — patikrinti V9.1 Recency / impulso signalą <b>kiekvienam EURO numeriui 1–12 atskirai</b>. Naudojami tie patys iš anksto nustatyti 26, 52, 78 ir 104 naujausių prognozių langai. Kiekvieno istorinio taško prognozė skaičiuojama tik iš tiražų iki t−1; 2026-10-02 tiražas neįtrauktas.</p>
+<button class="v5btn" id="v92run" onclick="runV92()">Paleisti V9.2 EURO-NUMBER testą</button>
+<div id="v92status" class="note" style="margin-top:14px"><b>LOCKED</b> — V9.2 dar nepaleistas.</div>
+<div class="v5grid" style="margin-top:14px">
+ <div class="v5card"><div class="muted">EURO numeriai</div><div class="v5big">12</div></div>
+ <div class="v5card"><div class="muted">Stabiliai teigiami</div><div class="v5big" id="v92stable">—</div></div>
+ <div class="v5card"><div class="muted">Statistiškai praėjo</div><div class="v5big" id="v92pass">—</div></div>
+ <div class="v5card"><div class="muted">Stipriausias kandidatas</div><div class="v5big" id="v92best" style="font-size:clamp(24px,4vw,42px)">—</div></div>
+</div>
+<div id="v92audit" class="note" style="margin-top:14px"></div>
+<h3>EURO numerių rezultatai</h3>
+<div style="overflow-x:auto"><table><thead><tr><th>EURO</th><th>26 Δ / p</th><th>52 Δ / p</th><th>78 Δ / p</th><th>104 Δ / p</th><th>Teigiami langai</th><th>Stat. praėjo</th><th>Vid. Δ</th><th>Verdiktas</th></tr></thead><tbody id="v92rows"></tbody></table></div>
+<h3>V9.2 santrauka</h3>
+<div style="overflow-x:auto"><table><thead><tr><th>Rodiklis</th><th>Rezultatas</th></tr></thead><tbody id="v92summary"></tbody></table></div>
+<div id="v92verdict" class="note" style="margin-top:14px"></div>
+</section>
+<script>
+(function(){
+ function m92(a){if(!a.length)return 0;var s=0;for(var i=0;i<a.length;i++)s+=a[i];return s/a.length}
+ function rng92(seed){var x=seed>>>0;return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return (x>>>0)/4294967296}}
+ function sign92(v,B,seed){var R=rng92(seed),obs=m92(v),ge=0;for(var b=0;b<B;b++){var s=0;for(var i=0;i<v.length;i++)s+=v[i]*(R()<.5?-1:1);if(s/v.length>=obs)ge++}return (ge+1)/(B+1)}
+ function ci92(v,B,block,seed){var R=rng92(seed),n=v.length,a=[];for(var b=0;b<B;b++){var z=[],st;while(z.length<n){st=Math.floor(R()*Math.max(1,n-block+1));for(var k=0;k<block&&z.length<n;k++)z.push(v[st+k])}a.push(m92(z))}a.sort(function(x,y){return x-y});return [a[Math.floor(.025*(B-1))],a[Math.floor(.975*(B-1))]]}
+ function raw92(hist){var n=12,o=[],i,j,q;for(i=0;i<n;i++)o[i]=0;if(!hist.length)return o;var seg=hist.slice(-12);for(j=0;j<seg.length;j++)for(q=0;q<seg[j].euro.length;q++)o[seg[j].euro[q]-1]+=(j+1);return o}
+ function point92(t,num){var h=draws.slice(0,t),p=v5prob(raw92(h),2,.20),y=draws[t].euro.indexOf(num)>=0?1:0,base=2/12;var bs=(base-y)*(base-y),ms=(p[num-1]-y)*(p[num-1]-y);return {date:draws[t].date,d:bs-ms,p:p[num-1],y:y}}
+ window.runV92=function(){var btn=el('v92run'),t0=performance.now();btn.disabled=true;el('v92status').innerHTML='<b>VYKSTA…</b> 12 EURO numerių × 4 langai; atliekama walk-forward ir statistinė kontrolė.';setTimeout(function(){try{
+  var start=draws.findIndex(function(d){return d.date>='2023-01-01'});if(start<1)throw new Error('Nerasta 2023 pradžia.');var wins=[26,52,78,104],res=[],rows='',stableN=0,passNums=0;
+  for(var num=1;num<=12;num++){var all=[];for(var t=start;t<draws.length;t++)all.push(point92(t,num));var wr=[],pos=0,passes=0,avgs=[];
+   for(var wi=0;wi<wins.length;wi++){var W=wins[wi],a=all.slice(Math.max(0,all.length-W)),v=a.map(function(x){return x.d}),av=m92(v),ci=ci92(v,1999,Math.max(4,Math.min(8,Math.floor(a.length/4))),920000+num*100+W),pv=sign92(v,4999,930000+num*100+W),pass=av>0&&ci[0]>0&&pv<=.05;if(av>0)pos++;if(pass)passes++;avgs.push(av);wr.push({W:W,av:av,ci:ci,p:pv,pass:pass})}
+   var avg=m92(avgs),stable=pos>=3;if(stable)stableN++;if(passes>0)passNums++;res.push({num:num,wr:wr,pos:pos,passes:passes,avg:avg,stable:stable});
+  }
+  res.sort(function(a,b){if(b.passes!==a.passes)return b.passes-a.passes;if(b.pos!==a.pos)return b.pos-a.pos;return b.avg-a.avg});
+  for(var r=0;r<res.length;r++){var x=res[r],cells='';for(var j=0;j<x.wr.length;j++){var z=x.wr[j];cells+='<td>'+f4(z.av)+' / '+z.p.toFixed(3)+(z.pass?' ✓':'')+'</td>'}var verdict=x.passes>0?'<span class="good">STAT. SIGNALAS</span>':(x.stable?'<span class="warn">STABILIAI +, NEPATVIRTINTA</span>':(x.pos>=2?'LOKALIAI +':'NEPATVIRTINTA'));rows+='<tr><td><b>'+x.num+'</b></td>'+cells+'<td>'+x.pos+'/4</td><td>'+x.passes+'/4</td><td>'+f4(x.avg)+'</td><td>'+verdict+'</td></tr>'}
+  el('v92rows').innerHTML=rows;el('v92stable').textContent=stableN+'/12';el('v92pass').textContent=passNums+'/12';el('v92best').textContent='#'+res[0].num;
+  el('v92audit').innerHTML='<b>AUDITAS:</b> <span class="good">griežtas walk-forward, be ateities nutekėjimo.</span><br>Recency formulė, α=0.20 ir 26/52/78/104 langai nekeisti po V9.1 rezultatų. Kiekvienas EURO numeris 1–12 vertinamas prieš tą pačią bazinę tikimybę 2/12. Dabartinis 2026-10-02 tiražas neįtrauktas. Kadangi vienu metu tikrinama 12 numerių × 4 langai, pavienį p≤0.05 reikia vertinti atsargiai dėl daugybinio testavimo.';
+  var top=res.slice(0,3).map(function(x){return '#'+x.num+' ('+x.pos+'/4 +; '+x.passes+'/4 stat.; vid. Δ '+f4(x.avg)+')'}).join(', ');
+  el('v92summary').innerHTML='<tr><td>Signalas</td><td>Recency / impulsas kiekvienam EURO 1–12</td></tr><tr><td>Langai</td><td>26, 52, 78, 104 prognozės</td></tr><tr><td>Stabiliai teigiami (≥3/4 langų)</td><td>'+stableN+'/12</td></tr><tr><td>Bent vieną statistinį langą praėjo</td><td>'+passNums+'/12</td></tr><tr><td>TOP 3 pagal iš anksto nustatytą diagnostinį rikiavimą</td><td>'+top+'</td></tr>';
+  var verdict;if(passNums>=2){verdict='<b class="good">RASTA EURO NUMERIŲ SU STIPRESNIU LOKALIU RECENCY SIGNALU.</b><br>Tačiau prieš naudojant juos būsimam tiražui reikia dar vieno užrakinto patvirtinimo etapo ir daugybinio testavimo kontrolės.'}else if(stableN>=2){verdict='<b class="warn">KELI EURO NUMERIAI YRA NUOSEKLIAI TEIGIAMI, BET STATISTINIS PATVIRTINIMAS SILPNAS.</b><br>V9.2 juos išskiria kaip kandidatus kitam testui, ne kaip garantuotus ar patikimai pranašesnius pasirinkimus.'}else{verdict='<b class="warn">V9.1 BENDRAS PAGERĖJIMAS NESUSIKONCENTRAVO Į TVIRTĄ ATSKIRŲ EURO NUMERIŲ SIGNALĄ.</b><br>Vien pagal šį testą nėra pagrindo išskirti konkrečių EURO numerių kaip turinčių prognozinį pranašumą.'}el('v92verdict').innerHTML=verdict;
+  el('v92status').innerHTML='<b class="good">BAIGTA ✓</b> — 12 EURO numerių × 4 langai; kiekvienam 4 999 sign-flip + 1 999 block-bootstrap; '+((performance.now()-t0)/1000).toFixed(3)+' s.';
+ }catch(e){el('v92status').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e)}btn.disabled=false},50)};
+})();
+</script>
+
 </body></html>
