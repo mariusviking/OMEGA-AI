@@ -1186,4 +1186,33 @@ window.runV90=function(){var btn=el('v90run'),t0=performance.now();btn.disabled=
 })();
 </script>
 
+
+<section class="card" id="v94">
+<h2>25. OMEGA V9.4 — LIVE LOCK • 2026-10-02</h2>
+<p class="muted">Šis etapas sukuria tris šiandienos Eurojackpot diagnostinius derinius tik iš duomenų iki 2026-09-29 ir juos užrakina naršyklėje. EURO TOP-2 naudoja nepakeistą V9.3 procedūrą. MAIN dalis yra fiksuotas diagnostinis konsensusas, todėl nėra statistiškai patvirtinta kaip pranašesnė už atsitiktinį pasirinkimą.</p>
+<div class="v5grid">
+ <div class="v5card"><div class="muted">LIVE data</div><div class="v5big" style="font-size:30px">2026-10-02</div></div>
+ <div class="v5card"><div class="muted">Duomenys iki</div><div class="v5big" id="v94cut" style="font-size:30px">—</div></div>
+ <div class="v5card"><div class="muted">Būsena</div><div class="v5big warn" id="v94state">NEUŽRAKINTA</div></div>
+</div>
+<button class="v5btn" id="v94run" onclick="runV94()">Sukurti ir UŽRAKINTI 3 derinius</button>
+<div id="v94status" class="note" style="margin-top:14px"><b>Paruošta.</b> 2026-10-02 rezultatas nėra naudojamas.</div>
+<h3>3 šiandienos deriniai</h3><div id="v94tickets" class="v5grid"></div>
+<div id="v94audit" class="note" style="margin-top:14px"></div>
+</section>
+<script>
+(function(){
+ var K94='OMEGA_V94_LOCK_2026_10_02';
+ function mean94(a){var s=0;for(var i=0;i<a.length;i++)s+=a[i];return a.length?s/a.length:0}
+ function rawE94(hist){var o=[],i,j,q;for(i=0;i<12;i++)o[i]=0;var seg=hist.slice(-12);for(j=0;j<seg.length;j++)for(q=0;q<seg[j].euro.length;q++)o[seg[j].euro[q]-1]+=(j+1);return o}
+ function probE94(hist){return v5prob(rawE94(hist),2,.20)}
+ function scoreE94(hist,num){var wins=[26,52,78,104],pts=[],start=Math.max(1,hist.length-104),t,i,p,y,b=2/12,d,avgs=[],pos=0;for(t=start;t<hist.length;t++){p=probE94(hist.slice(0,t));y=hist[t].euro.indexOf(num)>=0?1:0;d=(b-y)*(b-y)-(p[num-1]-y)*(p[num-1]-y);pts.push(d)}for(i=0;i<wins.length;i++){var a=pts.slice(Math.max(0,pts.length-wins[i])),av=mean94(a);avgs.push(av);if(av>0)pos++}return{num:num,pos:pos,avg:mean94(avgs)}}
+ function pickE94(hist){var a=[];for(var n=1;n<=12;n++)a.push(scoreE94(hist,n));a.sort(function(x,y){if(y.pos!==x.pos)return y.pos-x.pos;if(y.avg!==x.avg)return y.avg-x.avg;return x.num-y.num});return[a[0].num,a[1].num]}
+ function mainScores94(hist){var cfg=[{type:'freq',win:40},{type:'freq',win:80},{type:'recent',win:40},{type:'recent',win:80},{type:'gap',win:80},{type:'gap',win:120}],sum=[],i,c,p;for(i=0;i<50;i++)sum[i]=0;for(c=0;c<cfg.length;c++){p=v5prob(v5raw(hist,50,'numbers',cfg[c]),5,.20);for(i=0;i<50;i++)sum[i]+=p[i]/cfg.length}var a=[];for(i=0;i<50;i++)a.push({n:i+1,s:sum[i]});a.sort(function(x,y){return y.s-x.s||x.n-y.n});return a}
+ function makeTickets94(rank,e){var pool=rank.slice(0,15).map(function(x){return x.n}),T=[],patterns=[[0,1,2,3,4],[0,2,5,7,9],[1,3,6,8,10]];for(var k=0;k<3;k++){var m=patterns[k].map(function(i){return pool[i]}).sort(function(a,b){return a-b});T.push({main:m,euro:e.slice().sort(function(a,b){return a-b})})}return T}
+ function render94(x){el('v94cut').textContent=x.cut;el('v94state').textContent='UŽRAKINTA';el('v94state').className='v5big good';var h='';for(var i=0;i<x.tickets.length;i++){var t=x.tickets[i];h+='<div class="v5card"><div class="muted">DERINYS '+(i+1)+'</div><div class="ticket"><b>'+t.main.join(' · ')+'</b><br><span class="pill">EURO '+t.euro.join(' · ')+'</span></div></div>'}el('v94tickets').innerHTML=h;el('v94status').innerHTML='<b class="good">LIVE LOCK ✓</b> — prognozė užrakinta '+x.lockedAt+'.';el('v94audit').innerHTML='<b>AUDITAS:</b> naudoti tik tiražai iki '+x.cut+'. EURO parinkimas = nepakeista V9.3 TOP-2 procedūra. MAIN = iš anksto fiksuotas 6 diagnostinių signalų konsensusas (freq 40/80, recent 40/80, gap 80/120); 3 deriniai diversifikuoti pagal fiksuotus indeksų šablonus. <b>Po užrakinimo skaičiai nebeperskaičiuojami.</b><br><span class="warn">Tai eksperimentiniai deriniai, ne laimėjimo garantija.</span>'}
+ window.runV94=function(){try{var old=localStorage.getItem(K94);if(old){render94(JSON.parse(old));return}var hist=draws.filter(function(d){return d.date<'2026-10-02'});if(!hist.length)throw new Error('Nėra istorinių duomenų.');var last=hist[hist.length-1];if(last.date!=='2026-09-29')throw new Error('Tikėtasi paskutinio tiražo 2026-09-29, rasta '+last.date);var e=pickE94(hist),rank=mainScores94(hist),x={date:'2026-10-02',cut:last.date,euro:e,tickets:makeTickets94(rank,e),lockedAt:new Date().toISOString()};localStorage.setItem(K94,JSON.stringify(x));render94(x)}catch(err){el('v94status').innerHTML='<b class="bad">KLAIDA:</b> '+String(err.message||err)}};
+ try{var z=localStorage.getItem(K94);if(z)render94(JSON.parse(z));else{var h=draws.filter(function(d){return d.date<'2026-10-02'});if(h.length)el('v94cut').textContent=h[h.length-1].date}}catch(e){}
+})();
+</script>
 </body></html>
