@@ -987,4 +987,63 @@ window.runV89=function(){var t0=performance.now(),btn=el('v89run');btn.disabled=
 })();
 </script>
 
+
+
+<section class="card" id="v90">
+<h2>21. OMEGA V9.0 — Component Ablation Walk-Forward</h2>
+<p class="muted">Šis testas nebeoptimizuoja vien zone lango. Kiekviena EURO signalo šeima tikrinama <b>atskirai</b> tame pačiame tikrai vėlesniame 2023–2026 walk-forward periode. Kiekvienai prognozei naudojama tik iki tos datos buvusi istorija. Tikslas — nustatyti, ar bent vienas komponentas pats savaime turi pakartojamą out-of-sample vertę.</p>
+<button class="v5btn" id="v90run" onclick="runV90()">Paleisti V9.0 COMPONENT ABLATION</button>
+<div id="v90status" class="note" style="margin-top:14px"><b>LOCKED</b> — V9.0 dar nepaleistas.</div>
+<div class="v5grid" style="margin-top:14px">
+ <div class="v5card"><div class="muted">Testuojami komponentai</div><div class="v5big" id="v90c">7</div></div>
+ <div class="v5card"><div class="muted">Tikrai vėlesni taškai</div><div class="v5big" id="v90n">—</div></div>
+ <div class="v5card"><div class="muted">Teigiamas vid. Δ</div><div class="v5big" id="v90pos">—</div></div>
+ <div class="v5card"><div class="muted">Statistiškai praėjo</div><div class="v5big" id="v90pass">—</div></div>
+</div>
+<div id="v90audit" class="note" style="margin-top:14px"></div>
+<h3>Komponentų ablation rezultatai</h3>
+<div style="overflow-x:auto"><table><thead><tr><th>Komponentas</th><th>N</th><th>Vid. Δ</th><th>Modelio pct</th><th>95% block-bootstrap CI</th><th>Sign-flip p</th><th>Teigiamų Δ</th><th>Verdiktas</th></tr></thead><tbody id="v90rows"></tbody></table></div>
+<h3>Rezultatai pagal metus</h3>
+<div style="overflow-x:auto"><table><thead><tr><th>Komponentas</th><th>2023 Δ</th><th>2024 Δ</th><th>2025 Δ</th><th>2026 Δ</th></tr></thead><tbody id="v90years"></tbody></table></div>
+<h3>V9.0 santrauka</h3>
+<div style="overflow-x:auto"><table><thead><tr><th>Rodiklis</th><th>Rezultatas</th></tr></thead><tbody id="v90summary"></tbody></table></div>
+<div id="v90verdict" class="note" style="margin-top:14px"></div>
+</section>
+<script>
+(function(){
+function mean90(a,key){if(!a.length)return 0;var s=0;for(var i=0;i<a.length;i++)s+=key?a[i][key]:a[i];return s/a.length}
+function defs90(){return [
+ {type:'frequency',name:'Dažnis'},
+ {type:'recency',name:'Recency / impulsas'},
+ {type:'gap',name:'Tarpai / gap'},
+ {type:'repeat',name:'Paskutinio tiražo kartojimas'},
+ {type:'trend',name:'Trumpas–vidutinis trendas'},
+ {type:'pair',name:'Porų perėjimas'},
+ {type:'zone',name:'Zone perėjimas'}
+]}
+function raw90(hist,c){var n=12,o=[],i,j,q,L=hist.length,last=L?hist[L-1].euro:[];for(i=0;i<n;i++)o[i]=0;if(!L)return o;
+ if(c.type==='frequency'){var seg=hist.slice(-120);for(j=0;j<seg.length;j++)for(q=0;q<seg[j].euro.length;q++)o[seg[j].euro[q]-1]++;}
+ else if(c.type==='recency'){var seg2=hist.slice(-12);for(j=0;j<seg2.length;j++)for(q=0;q<seg2[j].euro.length;q++)o[seg2[j].euro[q]-1]+=(j+1);}
+ else if(c.type==='gap'){for(i=1;i<=n;i++){var g=Math.min(120,L);for(j=L-1;j>=Math.max(0,L-120);j--)if(hist[j].euro.indexOf(i)>=0){g=L-1-j;break}o[i-1]=Math.log(1+g);}}
+ else if(c.type==='repeat'){for(q=0;q<last.length;q++)o[last[q]-1]=1;}
+ else if(c.type==='trend'){var sh=[],md=[];for(i=0;i<n;i++){sh[i]=0;md[i]=0}var a=hist.slice(-10),b=hist.slice(-40);for(j=0;j<a.length;j++)for(q=0;q<a[j].euro.length;q++)sh[a[j].euro[q]-1]++;for(j=0;j<b.length;j++)for(q=0;q<b[j].euro.length;q++)md[b[j].euro[q]-1]++;for(i=0;i<n;i++)o[i]=sh[i]/Math.max(1,a.length)-md[i]/Math.max(1,b.length);}
+ else if(c.type==='pair'){var st=Math.max(1,L-120);for(j=st;j<L;j++){var prev=hist[j-1].euro,cur=hist[j].euro,hit=0;for(q=0;q<prev.length;q++)if(last.indexOf(prev[q])>=0)hit++;if(hit>=2)for(var r=0;r<cur.length;r++)o[cur[r]-1]+=1;}}
+ else if(c.type==='zone'){var zones=3,z=Math.ceil(n/zones),active=[0,0,0],st2=Math.max(1,L-120);for(q=0;q<last.length;q++)active[Math.min(zones-1,Math.floor((last[q]-1)/z))]++;for(j=st2;j<L;j++){var pa=hist[j-1].euro,cu=hist[j].euro,zw=0;for(q=0;q<pa.length;q++){var zi=Math.min(zones-1,Math.floor((pa[q]-1)/z));if(active[zi])zw+=active[zi]}if(zw)for(var rr=0;rr<cu.length;rr++)o[cu[rr]-1]+=zw;}}
+ return o}
+function pred90(t,c){var h=draws.slice(0,t),p=v5prob(raw90(h,c),2,.20),rb=[];for(var i=0;i<12;i++)rb[i]=2/12;return {date:draws[t].date,db:brier(rb,draws[t].euro)-brier(p,draws[t].euro),pct:pct(p,draws[t].euro)}}
+function sign90(v,B){var obs=mean90(v),ge=0;for(var b=0;b<B;b++){var s=0;for(var i=0;i<v.length;i++)s+=v[i]*(Math.random()<.5?-1:1);if(s/v.length>=obs)ge++}return (ge+1)/(B+1)}
+function ci90(v,B,block){var n=v.length,a=[];for(var b=0;b<B;b++){var z=[],st;while(z.length<n){st=Math.floor(Math.random()*Math.max(1,n-block+1));for(var k=0;k<block&&z.length<n;k++)z.push(v[st+k])}a.push(mean90(z))}a.sort(function(x,y){return x-y});return [a[Math.floor(.025*(B-1))],a[Math.floor(.975*(B-1))]]}
+window.runV90=function(){var btn=el('v90run'),t0=performance.now();btn.disabled=true;el('v90status').innerHTML='<b>VYKSTA…</b> atliekamas 7 komponentų chronologinis ablation testas.';setTimeout(function(){try{
+ var cfg=defs90(),start=draws.findIndex(function(d){return d.date>='2023-01-01'});if(start<1)throw new Error('Nerasta 2023 pradžia.');var rows='',yrs='',res=[],passes=0,posavg=0;
+ for(var c=0;c<cfg.length;c++){var a=[];for(var t=start;t<draws.length;t++)a.push(pred90(t,cfg[c]));var v=a.map(function(x){return x.db}),av=mean90(v),mp=mean90(a,'pct'),ci=ci90(v,1999,8),pv=sign90(v,4999),pos=a.filter(function(x){return x.db>0}).length,pass=av>0&&ci[0]>0&&pv<=.05;if(av>0)posavg++;if(pass)passes++;res.push({cfg:cfg[c],a:a,av:av,mp:mp,ci:ci,p:pv,pos:pos,pass:pass});rows+='<tr><td><b>'+cfg[c].name+'</b></td><td>'+a.length+'</td><td>'+f4(av)+'</td><td>'+(mp*100).toFixed(1)+'%</td><td>'+f4(ci[0])+' → '+f4(ci[1])+'</td><td>'+pv.toFixed(4)+'</td><td>'+pos+'/'+a.length+'</td><td>'+(pass?'<span class="good">PRAĖJO</span>':(av>0?'<span class="warn">NEPATVIRTINTA</span>':'<span class="warn">NEIGIAMAS</span>'))+'</td></tr>';}
+ res.sort(function(x,y){return y.av-x.av});el('v90rows').innerHTML=rows;for(var r=0;r<res.length;r++){var rr=res[r],line='<tr><td><b>'+rr.cfg.name+'</b></td>';['2023','2024','2025','2026'].forEach(function(y){var aa=rr.a.filter(function(x){return x.date.slice(0,4)===y});line+='<td>'+(aa.length?f4(mean90(aa,'db')):'—')+'</td>'});yrs+=line+'</tr>'}el('v90years').innerHTML=yrs;
+ el('v90n').textContent=draws.length-start;el('v90pos').textContent=posavg+'/'+cfg.length;el('v90pass').textContent=passes+'/'+cfg.length;
+ el('v90audit').innerHTML='<b>AUDITAS:</b> <span class="good">griežtas walk-forward, be ateities nutekėjimo.</span><br>Kiekvieno 2023–2026 traukimo t prognozė apskaičiuojama tik iš tiražų iki t−1. Visi 7 komponentai vertinami tuo pačiu laikotarpiu ir prieš tą pačią vienodą EURO bazę (2/12). Dabartinis 2026-10-02 traukimas į testą neįtrauktas.';
+ var best=res[0];el('v90summary').innerHTML='<tr><td>Walk-forward periodas</td><td>'+draws[start].date+' → '+draws[draws.length-1].date+'</td></tr><tr><td>Komponentai</td><td>dažnis, recency, gap, repeat, trend, poros, zone</td></tr><tr><td>Geriausias pagal vid. Δ</td><td>'+best.cfg.name+' / '+f4(best.av)+'</td></tr><tr><td>Teigiamą vidurkį turėjo</td><td>'+posavg+'/'+cfg.length+'</td></tr><tr><td>Praėjo Δ&gt;0 + CI&gt;0 + p≤0.05</td><td>'+passes+'/'+cfg.length+'</td></tr>';
+ var verdict;if(passes){var pp=res.filter(function(x){return x.pass}).map(function(x){return x.cfg.name}).join(', ');verdict='<b class="good">RASTA KOMPONENTŲ SU PATVIRTINTU OUT-OF-SAMPLE SIGNALU: '+pp+'.</b><br>Toliau verta konstruoti V9.1 tik iš šių komponentų ir dar kartą tikrinti atskirame užrakintame periode.'}else if(posavg){verdict='<b class="warn">YRA TEIGIAMŲ KOMPONENTŲ, BET STATISTINIS PRANAŠUMAS NEPATVIRTINTAS.</b><br>Jų negalima laikyti patikimu ateities traukimų signalu vien pagal šį testą.'}else{verdict='<b class="warn">NĖ VIENAS ATSKIRAS KOMPONENTAS NEPARODĖ TEIGIAMO OUT-OF-SAMPLE PRANAŠUMO.</b><br>Tai reikštų, kad toliau kombinuoti šiuos signalus vien tam, kad gautume TOP 3, nėra pagrįsta.'}el('v90verdict').innerHTML=verdict;
+ el('v90status').innerHTML='<b class="good">BAIGTA ✓</b> — '+cfg.length+' komponentai × '+(draws.length-start)+' tikrai vėlesnių prognozių; 4 999 sign-flip + 1 999 block-bootstrap kiekvienam; '+((performance.now()-t0)/1000).toFixed(3)+' s.';
+ }catch(e){el('v90status').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e)}btn.disabled=false},50)};
+})();
+</script>
+
 </body></html>
