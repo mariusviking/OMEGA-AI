@@ -1046,4 +1046,44 @@ window.runV90=function(){var btn=el('v90run'),t0=performance.now();btn.disabled=
 })();
 </script>
 
+
+<section class="card" id="v91">
+<h2>22. OMEGA V9.1 — Recent-Regime Validation</h2>
+<p class="muted">Tikslas — patikrinti, ar V9.0 pastebėtas 2026 m. <b>Recency / impulso</b> pagerėjimas yra pakartojamas trumpesniuose naujausios istorijos languose, o ne vien kelių tiražų efektas. Testuojami iš anksto nustatyti 26, 52, 78 ir 104 prognozių langai. Kiekviena prognozė vis dar skaičiuojama tik iš tuo momentu žinomos praeities.</p>
+<button class="v5btn" id="v91run" onclick="runV91()">Paleisti V9.1 RECENT-REGIME testą</button>
+<div id="v91status" class="note" style="margin-top:14px"><b>LOCKED</b> — V9.1 dar nepaleistas.</div>
+<div class="v5grid" style="margin-top:14px">
+ <div class="v5card"><div class="muted">Testuojami langai</div><div class="v5big">4</div></div>
+ <div class="v5card"><div class="muted">Teigiamas vid. Δ</div><div class="v5big" id="v91pos">—</div></div>
+ <div class="v5card"><div class="muted">Statistiškai praėjo</div><div class="v5big" id="v91pass">—</div></div>
+ <div class="v5card"><div class="muted">Stabilumo verdiktas</div><div class="v5big" id="v91stable" style="font-size:clamp(24px,4vw,42px)">—</div></div>
+</div>
+<div id="v91audit" class="note" style="margin-top:14px"></div>
+<h3>Recency signalas pagal naujausią langą</h3>
+<div style="overflow-x:auto"><table><thead><tr><th>Langas</th><th>Periodas</th><th>N</th><th>Vid. Δ</th><th>Modelio pct</th><th>95% block-bootstrap CI</th><th>Sign-flip p</th><th>Teigiamų Δ</th><th>Verdiktas</th></tr></thead><tbody id="v91rows"></tbody></table></div>
+<h3>V9.1 santrauka</h3>
+<div style="overflow-x:auto"><table><thead><tr><th>Rodiklis</th><th>Rezultatas</th></tr></thead><tbody id="v91summary"></tbody></table></div>
+<div id="v91verdict" class="note" style="margin-top:14px"></div>
+</section>
+<script>
+(function(){
+ function m91(a,k){if(!a.length)return 0;var s=0;for(var i=0;i<a.length;i++)s+=k?a[i][k]:a[i];return s/a.length}
+ function rng91(seed){var x=seed>>>0;return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return (x>>>0)/4294967296}}
+ function sign91(v,B,seed){var R=rng91(seed),obs=m91(v),ge=0;for(var b=0;b<B;b++){var s=0;for(var i=0;i<v.length;i++)s+=v[i]*(R()<.5?-1:1);if(s/v.length>=obs)ge++}return (ge+1)/(B+1)}
+ function ci91(v,B,block,seed){var R=rng91(seed),n=v.length,a=[];for(var b=0;b<B;b++){var z=[],st;while(z.length<n){st=Math.floor(R()*Math.max(1,n-block+1));for(var k=0;k<block&&z.length<n;k++)z.push(v[st+k])}a.push(m91(z))}a.sort(function(x,y){return x-y});return [a[Math.floor(.025*(B-1))],a[Math.floor(.975*(B-1))]]}
+ function recPred91(t){var c={type:'recency',name:'Recency / impulsas'},h=draws.slice(0,t),p=v5prob(raw90(h,c),2,.20),rb=[];for(var i=0;i<12;i++)rb[i]=2/12;return {date:draws[t].date,db:brier(rb,draws[t].euro)-brier(p,draws[t].euro),pct:pct(p,draws[t].euro)}}
+ window.runV91=function(){var btn=el('v91run'),t0=performance.now();btn.disabled=true;el('v91status').innerHTML='<b>VYKSTA…</b> tikrinamas Recency signalas 26 / 52 / 78 / 104 naujausių prognozių languose.';setTimeout(function(){try{
+  var start=draws.findIndex(function(d){return d.date>='2023-01-01'});if(start<1)throw new Error('Nerasta 2023 pradžia.');var all=[];for(var t=start;t<draws.length;t++)all.push(recPred91(t));var wins=[26,52,78,104],rows='',res=[],passes=0,pos=0;
+  for(var w=0;w<wins.length;w++){var W=wins[w],a=all.slice(Math.max(0,all.length-W)),v=a.map(function(x){return x.db}),av=m91(v),mp=m91(a,'pct'),ci=ci91(v,4999,Math.max(4,Math.min(8,Math.floor(a.length/4))),9100+W),pv=sign91(v,9999,9200+W),pp=a.filter(function(x){return x.db>0}).length,pass=av>0&&ci[0]>0&&pv<=.05;if(av>0)pos++;if(pass)passes++;res.push({W:W,a:a,av:av,mp:mp,ci:ci,p:pv,pp:pp,pass:pass});rows+='<tr><td><b>'+W+'</b></td><td>'+a[0].date+' → '+a[a.length-1].date+'</td><td>'+a.length+'</td><td>'+f4(av)+'</td><td>'+(mp*100).toFixed(1)+'%</td><td>'+f4(ci[0])+' → '+f4(ci[1])+'</td><td>'+pv.toFixed(4)+'</td><td>'+pp+'/'+a.length+'</td><td>'+(pass?'<span class="good">PRAĖJO</span>':(av>0?'<span class="warn">TEIGIAMAS, NEPATVIRTINTA</span>':'<span class="warn">NEIGIAMAS</span>'))+'</td></tr>'}
+  el('v91rows').innerHTML=rows;el('v91pos').textContent=pos+'/'+wins.length;el('v91pass').textContent=passes+'/'+wins.length;
+  var stable=(passes>=2 && res.filter(function(x){return x.av>0}).length>=3);el('v91stable').textContent=stable?'TAIP':'NE';
+  el('v91audit').innerHTML='<b>AUDITAS:</b> <span class="good">be ateities nutekėjimo.</span><br>Naudojamas tas pats V9.0 Recency komponentas, jo formulė ir α=0.20 nėra peroptimizuojami pagal šio testo rezultatą. 26/52/78/104 langai nustatyti prieš testą. Kiekvieno t taško prognozėje naudojami tik tiražai iki t−1. Dabartinis 2026-10-02 traukimas neįtrauktas.';
+  var best=res.slice().sort(function(a,b){return b.av-a.av})[0];
+  el('v91summary').innerHTML='<tr><td>Signalas</td><td>Recency / impulsas</td></tr><tr><td>Testuojami langai</td><td>26, 52, 78, 104 prognozės</td></tr><tr><td>Geriausias langas pagal vid. Δ</td><td>'+best.W+' / '+f4(best.av)+'</td></tr><tr><td>Teigiamą vidurkį turėjo</td><td>'+pos+'/'+wins.length+'</td></tr><tr><td>Praėjo Δ&gt;0 + CI&gt;0 + p≤0.05</td><td>'+passes+'/'+wins.length+'</td></tr><tr><td>Stabilumo taisyklė</td><td>≥3/4 teigiami ir ≥2/4 statistiškai praėjo</td></tr>';
+  var verdict;if(stable)verdict='<b class="good">RECENT-REGIME SIGNALAS IŠLAIKĖ V9.1 STABILUMO TESTĄ.</b><br>Recency efektas yra teigiamas bent 3 iš 4 iš anksto nustatytų langų ir statistiškai praeina bent 2. Tai pateisina kitą, dar griežtesnį užrakintą patvirtinimo etapą prieš naudojant signalą TOP 3.';else if(pos>=2)verdict='<b class="warn">YRA LOKALUS RECENCY PAGERĖJIMAS, BET STABILUMAS NEPATVIRTINTAS.</b><br>Keli naujausi langai gali būti teigiami, tačiau signalas neatitinka iš anksto nustatytos stabilumo taisyklės. Vien pagal tai TOP 3 konstruoti nepagrįsta.';else verdict='<b class="warn">RECENT-REGIME HIPOTEZĖ NEPASITVIRTINO.</b><br>2026 m. teigiamas Recency rezultatas neišsilaiko pakankamai nuosekliai skirtinguose naujausios istorijos languose.';el('v91verdict').innerHTML=verdict;
+  el('v91status').innerHTML='<b class="good">BAIGTA ✓</b> — 4 iš anksto nustatyti langai; 9 999 sign-flip + 4 999 block-bootstrap iteracijos kiekvienam; '+((performance.now()-t0)/1000).toFixed(3)+' s.';
+ }catch(e){el('v91status').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e)}btn.disabled=false},50)};
+})();
+</script>
+
 </body></html>
