@@ -1228,4 +1228,49 @@ window.runV90=function(){var btn=el('v90run'),t0=performance.now();btn.disabled=
 })();
 </script>
 
+
+<section class="card" id="v942">
+<h2>26. OMEGA V9.4.2 — LIVE #2 rezultatas + LIVE #3 • 2026-10-09</h2>
+<p class="muted">Įvesk faktinį 2026-10-06 Eurojackpot rezultatą. Programa pati patikrins užrakintą LIVE #2, išsaugos auditą ir tik tada leis ta pačia nepakeista metodika užrakinti LIVE #3.</p>
+<div class="v5grid">
+ <div class="v5card"><div class="muted">MAIN — 5 skaičiai</div><input id="v942main" inputmode="text" value="7 12 19 28 50" style="width:100%;font-size:22px;padding:12px;margin-top:8px"></div>
+ <div class="v5card"><div class="muted">EURO — 2 skaičiai</div><input id="v942euro" inputmode="text" value="1 6" style="width:100%;font-size:22px;padding:12px;margin-top:8px"></div>
+</div>
+<button class="v5btn" onclick="saveV942Result()">Įrašyti LIVE #2 rezultatą</button>
+<div id="v942resultstatus" class="note" style="margin-top:14px"><b>Paruošta.</b> Laukiama LIVE #2 faktinio rezultato.</div>
+<h3>LIVE #2 auditas</h3>
+<div style="overflow-x:auto"><table><thead><tr><th>Derinys</th><th>Užrakinta 2026-10-06</th><th>MAIN hit</th><th>EURO hit</th></tr></thead><tbody id="v942audit"></tbody></table></div>
+<div id="v942actual" class="note" style="margin-top:14px"></div>
+<button class="v5btn" id="v942run" onclick="runV942()" disabled>Sukurti ir UŽRAKINTI LIVE #3 — 3 derinius</button>
+<div id="v942status" class="note" style="margin-top:14px"><b>LIVE #3 dar neužrakintas.</b></div>
+<h3>LIVE #3 — 3 deriniai 2026-10-09</h3><div id="v942tickets" class="v5grid"></div>
+<div id="v942method" class="note" style="margin-top:14px"></div>
+</section>
+<script>
+(function(){
+ var K2='OMEGA_V941_LOCK_2026_10_06', KR='OMEGA_V942_RESULT_2026_10_06', K3='OMEGA_V942_LOCK_2026_10_09';
+ var fallback2={date:'2026-10-06',cut:'2026-10-02',tickets:[
+  {main:[4,6,17,23,45],euro:[4,5]},
+  {main:[6,17,30,37,48],euro:[4,5]},
+  {main:[4,21,42,45,47],euro:[4,5]}
+ ]};
+ function gi(id){return document.getElementById(id)}
+ function nums(v,min,max,count){var a=String(v).trim().split(/[^0-9]+/).filter(Boolean).map(Number);if(a.length!==count)throw new Error('Reikia '+count+' skaičių.');if(new Set(a).size!==a.length)throw new Error('Skaičiai negali kartotis.');for(var i=0;i<a.length;i++)if(a[i]<min||a[i]>max)throw new Error('Leistinos ribos: '+min+'–'+max+'.');return a.sort(function(a,b){return a-b})}
+ function hit(a,b){var n=0;for(var i=0;i<a.length;i++)if(b.indexOf(a[i])>=0)n++;return n}
+ function lock2(){try{return JSON.parse(localStorage.getItem(K2))||fallback2}catch(e){return fallback2}}
+ function renderResult(r){var L=lock2(),h='';for(var i=0;i<L.tickets.length;i++){var t=L.tickets[i];h+='<tr><td><b>#'+(i+1)+'</b></td><td>'+t.main.join(' · ')+' + EURO '+t.euro.join(' · ')+'</td><td>'+hit(t.main,r.numbers)+'/5</td><td>'+hit(t.euro,r.euro)+'/2</td></tr>'}gi('v942audit').innerHTML=h;gi('v942actual').innerHTML='<b>Faktas 2026-10-06:</b> '+r.numbers.join(' · ')+' + EURO '+r.euro.join(' · ')+'. <b>LIVE #2 užbaigtas.</b>';gi('v942resultstatus').innerHTML='<b class="good">LIVE #2 REZULTATAS ĮRAŠYTAS ✓</b> — prognozė nebuvo keičiama po fakto.';gi('v942run').disabled=false}
+ window.saveV942Result=function(){try{var r={date:'2026-10-06',numbers:nums(gi('v942main').value,1,50,5),euro:nums(gi('v942euro').value,1,12,2),savedAt:new Date().toISOString()};localStorage.setItem(KR,JSON.stringify(r));renderResult(r)}catch(e){gi('v942resultstatus').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e)}};
+ function mean(a){var s=0;for(var i=0;i<a.length;i++)s+=a[i];return a.length?s/a.length:0}
+ function rawE(hist){var o=[],i,j,q;for(i=0;i<12;i++)o[i]=0;var seg=hist.slice(-12);for(j=0;j<seg.length;j++)for(q=0;q<seg[j].euro.length;q++)o[seg[j].euro[q]-1]+=(j+1);return o}
+ function probE(hist){return v5prob(rawE(hist),2,.20)}
+ function scoreE(hist,num){var wins=[26,52,78,104],pts=[],start=Math.max(1,hist.length-104),t,i,p,y,b=2/12,d,avgs=[],pos=0;for(t=start;t<hist.length;t++){p=probE(hist.slice(0,t));y=hist[t].euro.indexOf(num)>=0?1:0;d=(b-y)*(b-y)-(p[num-1]-y)*(p[num-1]-y);pts.push(d)}for(i=0;i<wins.length;i++){var a=pts.slice(Math.max(0,pts.length-wins[i])),av=mean(a);avgs.push(av);if(av>0)pos++}return{num:num,pos:pos,avg:mean(avgs)}}
+ function pickE(hist){var a=[];for(var n=1;n<=12;n++)a.push(scoreE(hist,n));a.sort(function(x,y){if(y.pos!==x.pos)return y.pos-x.pos;if(y.avg!==x.avg)return y.avg-x.avg;return x.num-y.num});return[a[0].num,a[1].num]}
+ function mainScores(hist){var cfg=[{type:'freq',win:40},{type:'freq',win:80},{type:'recent',win:40},{type:'recent',win:80},{type:'gap',win:80},{type:'gap',win:120}],sum=[],i,c,p;for(i=0;i<50;i++)sum[i]=0;for(c=0;c<cfg.length;c++){p=v5prob(v5raw(hist,50,'numbers',cfg[c]),5,.20);for(i=0;i<50;i++)sum[i]+=p[i]/cfg.length}var a=[];for(i=0;i<50;i++)a.push({n:i+1,s:sum[i]});a.sort(function(x,y){return y.s-x.s||x.n-y.n});return a}
+ function makeTickets(rank,e){var pool=rank.slice(0,15).map(function(x){return x.n}),T=[],patterns=[[0,1,2,3,4],[0,2,5,7,9],[1,3,6,8,10]];for(var k=0;k<3;k++){var m=patterns[k].map(function(i){return pool[i]}).sort(function(a,b){return a-b});T.push({main:m,euro:e.slice().sort(function(a,b){return a-b})})}return T}
+ function render3(x){var h='';for(var i=0;i<x.tickets.length;i++){var t=x.tickets[i];h+='<div class="v5card"><div class="muted">DERINYS '+(i+1)+'</div><div class="ticket"><b>'+t.main.join(' · ')+'</b><br><span class="pill">EURO '+t.euro.join(' · ')+'</span></div></div>'}gi('v942tickets').innerHTML=h;gi('v942status').innerHTML='<b class="good">LIVE #3 LOCK ✓</b> — užrakinta '+x.lockedAt+'. Duomenų riba: '+x.cut+'.';gi('v942method').innerHTML='<b>AUDITAS:</b> LIVE #3 naudojo tik tiražus iki 2026-10-06. EURO = ta pati V9.3 TOP-2 procedūra; MAIN = tas pats V9.4 6 signalų konsensusas; langai, α ir diversifikavimo šablonai nepakeisti. <b>Po užrakinimo skaičiai nebeperskaičiuojami.</b>'}
+ window.runV942=function(){try{var old=localStorage.getItem(K3);if(old){render3(JSON.parse(old));return}var r=JSON.parse(localStorage.getItem(KR)||'null');if(!r)throw new Error('Pirmiausia įrašyk LIVE #2 rezultatą.');var hist=draws.filter(function(d){return d.date<'2026-10-06'});hist.push({date:'2026-10-06',numbers:r.numbers.slice(),euro:r.euro.slice()});hist.sort(function(a,b){return a.date.localeCompare(b.date)});var e=pickE(hist),rank=mainScores(hist),x={date:'2026-10-09',cut:'2026-10-06',euro:e,tickets:makeTickets(rank,e),lockedAt:new Date().toISOString()};localStorage.setItem(K3,JSON.stringify(x));render3(x)}catch(e){gi('v942status').innerHTML='<b class="bad">KLAIDA:</b> '+String(e.message||e)}};
+ try{var r=JSON.parse(localStorage.getItem(KR)||'null');if(r){gi('v942main').value=r.numbers.join(' ');gi('v942euro').value=r.euro.join(' ');renderResult(r)}var z=localStorage.getItem(K3);if(z)render3(JSON.parse(z))}catch(e){}
+})();
+</script>
+
 </body></html>
