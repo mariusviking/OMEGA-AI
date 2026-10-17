@@ -1386,4 +1386,31 @@ window.runV90=function(){var btn=el('v90run'),t0=performance.now();btn.disabled=
 <div class="notice"><b>Išvada:</b> V9.5 neturėtų tiesiog „spėti kitaip“. Ji turi patikrinti, ar diversifikacija ir persidengimo bauda iš tiesų pagerina rezultatus sąžiningame istoriniame teste. Iki tokio patvirtinimo jokio prognozavimo pranašumo neteigiame.</div>
 </section>
 
+
+<section class="card" id="omega95experiment">
+<h2>30. OMEGA V9.5 — eksperimentinis walk-forward palyginimas</h2>
+<p class="muted">Šis papildomas eksperimentas NEKEIČIA LIVE #1–#5 ir nesiūlo po fakto užrakintų prognozių. Kiekvienam istoriniam tiražui reitingas sudaromas tik iš ankstesnių tiražų. V9.4 kontrolė čia yra <b>supaprastintas dažnių reitingavimo pakaitalas</b>, o ne tikslus ankstesnės V9.4 šešių signalų formulės atkartojimas.</p>
+<div class="notice">Pagrindinis tikslas — palyginti <b>prizines kategorijas</b>, ne pavienių skaičių pataikymus. Palyginimas neįrodo, kad galima prognozuoti atsitiktinį traukimą.</div>
+<button type="button" onclick="omega95RunExperiment()">Paleisti chronologinį eksperimentą</button>
+<div id="omega95expStatus" class="notice">Eksperimentas dar nepaleistas.</div>
+<div class="scroll"><table><thead><tr><th>Metodas</th><th>Bilietai</th><th>Priziniai</th><th>3+2</th><th>4+1</th><th>4+2</th><th>5+1</th><th>5+2</th><th>Vid. MAIN</th><th>Vid. EURO</th></tr></thead><tbody id="omega95expTable"><tr><td colspan="10">Paleisk eksperimentą.</td></tr></tbody></table></div>
+<h3>Metodai ir ribojimai</h3><p class="muted">Kontrolė: dažnių reitingo trys persidengiantys deriniai ir vienoda EURO pora. Diversifikacija: 15 skirtingų MAIN ir 6 skirtingi EURO skaičiai. Bauda: reitingo balas mažinamas už kiekvieną ankstesnį panaudojimą, neatsisakant stipriausiai įvertintų skaičių. Random: deterministinis pseudoatsitiktinis palyginimas, kurį galima atkartoti. Visi metodai naudoja 3 bilietus vienam tiražui; 2026-10-16 ir ankstesni LIVE įrašai nekeičiami.</p>
+<div class="notice"><b>Svarbu:</b> šis testas yra tiriamoji, ne nepriklausoma patvirtinimo imtis. Jei ateityje keisime taisykles pagal čia matomą rezultatą, reikės naujo iš anksto užrakinto LIVE palyginimo.</div>
+</section>
+<script>
+(function(){'use strict';
+const $=id=>document.getElementById(id);
+const valid=d=>d&&/^\d{4}-\d\d-\d\d$/.test(d.date)&&Array.isArray(d.numbers)&&d.numbers.length===5&&Array.isArray(d.euro)&&d.euro.length===2;
+function ranking(hist,key,max){const score=Array(max).fill(0);const recent=hist.slice(-104);recent.forEach((d,i)=>d[key].forEach(n=>{if(n>=1&&n<=max)score[n-1]+=1+(i+1)/104}));return score.map((s,i)=>({n:i+1,s})).sort((a,b)=>b.s-a.s||a.n-b.n)}
+function build(hist,mode,seed){const main=ranking(hist,'numbers',50),euro=ranking(hist,'euro',12),tickets=[];let usedM={},usedE={};let state=seed>>>0;function rand(){state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296}function shuffled(max){const a=Array.from({length:max},(_,i)=>i+1);for(let i=a.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+if(mode==='random'){const m=shuffled(50),e=shuffled(12);for(let k=0;k<3;k++)tickets.push({main:m.slice(k*5,k*5+5).sort((a,b)=>a-b),euro:e.slice(k*2,k*2+2).sort((a,b)=>a-b)});return tickets}
+if(mode==='baseline'){const pool=main.slice(0,15).map(x=>x.n),patterns=[[0,1,2,3,4],[0,2,5,7,9],[1,3,6,8,10]];return patterns.map(p=>({main:p.map(i=>pool[i]).sort((a,b)=>a-b),euro:euro.slice(0,2).map(x=>x.n).sort((a,b)=>a-b)}))}
+for(let k=0;k<3;k++){function pick(rank,used,count,penalty){const a=rank.slice().sort((x,y)=>(y.s-penalty*(used[y.n]||0))-(x.s-penalty*(used[x.n]||0))||x.n-y.n).slice(0,count).map(x=>x.n);a.forEach(n=>used[n]=(used[n]||0)+1);return a.sort((a,b)=>a-b)}
+const pm=mode==='diverse'?1e6:3.5,pe=mode==='diverse'?1e6:3.5;tickets.push({main:pick(main,usedM,5,pm),euro:pick(euro,usedE,2,pe)})}return tickets}
+function category(m,e){return (m===5&&e>=0)||(m===4&&e>=0)||(m===3&&e===2)||(m===3&&e===1)||(m===3&&e===0)||(m===2&&e===2)||(m===2&&e===1)||(m===1&&e===2)?true:(m===0&&e===2)}
+// Eurojackpot prizų klasės: 5+2,5+1,5+0,4+2,4+1,4+0,3+2,3+1,3+0,2+2,2+1,1+2.
+function prize(m,e){return m===5||m===4||m===3||(m===2&&e>=1)||(m===1&&e===2)}
+window.omega95RunExperiment=function(){try{if(typeof draws==='undefined'||!Array.isArray(draws))throw Error('Nepavyko rasti istorinių tiražų duomenų.');const hist=draws.filter(valid).map(d=>({date:d.date,numbers:d.numbers.slice(),euro:d.euro.slice()})).sort((a,b)=>a.date.localeCompare(b.date));const unique=hist.filter((d,i)=>i===0||d.date!==hist[i-1].date);const eligible=unique.filter(d=>d.date<='2026-10-16');if(eligible.length<130)throw Error('Per mažai istorinių duomenų (reikia bent 130 tiražų).');const start=Math.max(104,eligible.length-260),methods=['baseline','diverse','penalty','random'];const results=Object.fromEntries(methods.map(m=>[m,{tickets:0,prizes:0,m32:0,m41:0,m42:0,m51:0,m52:0,main:0,euro:0}]));for(let i=start;i<eligible.length;i++){const prior=eligible.slice(0,i),actual=eligible[i];for(const mode of methods){const ts=build(prior,mode,i*7919+137);for(const t of ts){const m=t.main.filter(n=>actual.numbers.includes(n)).length,e=t.euro.filter(n=>actual.euro.includes(n)).length,r=results[mode];r.tickets++;r.prizes+=Number(prize(m,e));r.m32+=Number(m===3&&e===2);r.m41+=Number(m===4&&e===1);r.m42+=Number(m===4&&e===2);r.m51+=Number(m===5&&e===1);r.m52+=Number(m===5&&e===2);r.main+=m;r.euro+=e}}}const names={baseline:'Dažnių kontrolė (V9.4 pakaitalas)',diverse:'Maksimali diversifikacija',penalty:'Persidengimo bauda',random:'Atsitiktinė kontrolė'};$('omega95expTable').innerHTML=methods.map(mode=>{const r=results[mode];return '<tr><td>'+names[mode]+'</td><td>'+r.tickets+'</td><td>'+r.prizes+'</td><td>'+r.m32+'</td><td>'+r.m41+'</td><td>'+r.m42+'</td><td>'+r.m51+'</td><td>'+r.m52+'</td><td>'+(r.main/r.tickets).toFixed(3)+'</td><td>'+(r.euro/r.tickets).toFixed(3)+'</td></tr>'}).join('');$('omega95expStatus').textContent='Chronologiškai įvertinta '+(eligible.length-start)+' tiražų, po 3 bilietus kiekvienam metodui. Pirmas testas: '+eligible[start].date+'; paskutinis: '+eligible[eligible.length-1].date+'. Ateities informacija prognozėms nenaudota.'}catch(e){$('omega95expStatus').textContent='KLAIDA: '+e.message}};
+})();
+</script>
 </body></html>
