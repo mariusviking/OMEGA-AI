@@ -1604,4 +1604,32 @@ window.omegaC12Run=function(){
 };
 })();
 </script>
+
+<section class="card" id="omegaV103">
+<h2>36. OMEGA V10.3 — istorinių signalų tyrimas</h2>
+<p class="muted">Eksperimentinis chronologinis palyginimas: dažnis, intervalai, retumas, porų ir trejetų ryšiai bei paskutinio tiražo signalas. Metodai parenkami tik validacijoje; galutinis testas neįtraukiamas į atranką. C LIVE neįjungiamas, A/B įrašai nekeičiami.</p>
+<button type="button" onclick="omegaV103Run()">Paleisti V10.3 istorinį tyrimą</button>
+<div class="notice" id="v103status">Dar nepaleista.</div>
+<div class="scroll"><table><thead><tr><th>Metodas</th><th>Validacija: prizai / bil.</th><th>Testas: prizai / bil.</th><th>Testas: vid. MAIN</th><th>Testas: vid. EURO</th><th>Testas: 3+ MAIN</th></tr></thead><tbody id="v103table"></tbody></table></div>
+<h3>Metiniai testo rezultatai</h3><div class="scroll"><table><thead><tr><th>Metai</th><th>Tiražai</th><th>Pasirinktas metodas: prizai</th><th>Dažnis 26: prizai</th><th>Random: prizai</th></tr></thead><tbody id="v103years"></tbody></table></div>
+<div class="notice" id="v103verdict">Laukiama testo. Priziniai bilietai skaičiuojami pagal kategorijas, o ne išmokų dydį; faktinių istorinių išmokų duomenų šiame faile nėra.</div>
+</section>
+<script>
+(function(){'use strict';
+const $=id=>document.getElementById(id);
+function seed(s){let x=2166136261;for(let c of s){x^=c.charCodeAt(0);x=Math.imul(x,16777619)}return x>>>0||1}
+function rng(s){let x=seed(s);return()=>{x^=x<<13;x^=x>>>17;x^=x<<5;return(x>>>0)/4294967296}}
+function shuffle(a,r){for(let i=a.length-1;i>0;i--){let j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function data(){let seen=new Set();return BASE.filter(d=>d.date>='2022-04-01'&&d.date<='2026-10-09'&&d.numbers.length===5&&d.euro.length===2).concat([
+{date:'2026-10-06',numbers:[7,12,19,28,50],euro:[1,6]},
+{date:'2026-10-09',numbers:[18,38,41,43,46],euro:[7,10]}
+]).sort((a,b)=>a.date.localeCompare(b.date)).filter(d=>{if(seen.has(d.date))return false;seen.add(d.date);return true})}
+function score(ds,i,window,mode,field,max){let a=Array(max+1).fill(0),co=Array.from({length:max+1},()=>Array(max+1).fill(0)),tr=Array.from({length:max+1},()=>Array(max+1).fill(0)),last=Array(max+1).fill(-1),start=Math.max(0,i-window);for(let k=start;k<i;k++){let ns=ds[k][field];for(let n of ns){a[n]++;last[n]=k}for(let x=0;x<ns.length;x++)for(let y=x+1;y<ns.length;y++){co[ns[x]][ns[y]]++;co[ns[y]][ns[x]]++}}let prev=ds[i-1][field];let result=Array.from({length:max},(_,k)=>k+1).map(n=>{let f=a[n],gap=last[n]<0?window:i-1-last[n],v=f;if(mode==='Retumas 52')v=-f;if(mode==='Intervalai 52')v=gap;if(mode==='Paskutinio tiražo signalas')v=prev.includes(n)?1:0;if(mode==='Poros 52')v=f+0.2*prev.reduce((s,k)=>s+co[n][k],0);if(mode==='Trejetų 52')v=f+0.15*prev.reduce((s,k)=>s+co[n][k],0)+0.04*prev.reduce((s,k)=>s+co[n][k]*co[n][k],0);return{n,v}});return result.sort((a,b)=>b.v-a.v||a.n-b.n).map(x=>x.n)}
+function tickets(ds,i,mode){if(mode==='Random'){let r=rng('V103-'+ds[i].date);let m=shuffle(Array.from({length:50},(_,k)=>k+1),r),e=shuffle(Array.from({length:12},(_,k)=>k+1),r);return[0,1,2].map(k=>({m:m.slice(5*k,5*k+5),e:e.slice(2*k,2*k+2)}))}let w=mode.includes('26')?26:mode.includes('104')?104:52;let m=score(ds,i,w,mode,'numbers',50),e=score(ds,i,w,'Dažnis 52','euro',12);return[0,1,2].map(k=>({m:m.slice(k*5,k*5+5),e:e.slice(k*2,k*2+2)}))}
+function empty(){return{p:0,n:0,m:0,e:0,three:0}}
+function add(o,t,d){for(let x of t){let m=x.m.filter(n=>d.numbers.includes(n)).length,e=x.e.filter(n=>d.euro.includes(n)).length;o.n++;o.m+=m;o.e+=e;o.three+=+(m>=3);o.p+=+(m>=3||(m===2&&e>=1)||(m===1&&e===2))}}
+function runRange(ds,lo,hi,mode){let o=empty(),years={};for(let i=lo;i<hi;i++){let d=ds[i],y=d.date.slice(0,4),t=tickets(ds,i,mode);add(o,t,d);if(!years[y])years[y]=empty();add(years[y],t,d)}return{o,years}}
+window.omegaV103Run=function(){let status=$('v103status');status.textContent='Skaičiuojama...';setTimeout(()=>{try{let ds=data(),first=ds.findIndex(d=>d.date>='2022-04-01'),mid=ds.findIndex(d=>d.date>='2024-07-05');if(first<0||mid<104||ds.length-mid<100)throw Error('Trūksta chronologinių duomenų');let methods=['Dažnis 26','Dažnis 52','Dažnis 104','Intervalai 52','Retumas 52','Poros 52','Trejetų 52','Paskutinio tiražo signalas','Random'];let rows=methods.map(name=>({name,v:runRange(ds,104,mid,name),t:runRange(ds,mid,ds.length,name)}));let selected=rows.filter(r=>r.name!=='Random').sort((a,b)=>b.v.o.p-a.v.o.p||a.name.localeCompare(b.name))[0];let base=rows.find(r=>r.name==='Dažnis 26'),rand=rows.find(r=>r.name==='Random');$('v103table').innerHTML=rows.map(r=>{let o=r.t.o;return'<tr><td>'+r.name+(r===selected?' ★':'')+'</td><td>'+r.v.o.p+'/'+r.v.o.n+'</td><td>'+o.p+'/'+o.n+'</td><td>'+(o.m/o.n).toFixed(3)+'</td><td>'+(o.e/o.n).toFixed(3)+'</td><td>'+o.three+'</td></tr>'}).join('');let years=[...new Set(ds.slice(mid).map(d=>d.date.slice(0,4)))];$('v103years').innerHTML=years.map(y=>'<tr><td>'+y+'</td><td>'+selected.t.years[y].n/3+'</td><td>'+selected.t.years[y].p+'</td><td>'+base.t.years[y].p+'</td><td>'+rand.t.years[y].p+'</td></tr>').join('');status.textContent='Validacija: '+ds[104].date+' – '+ds[mid-1].date+'; galutinis testas: '+ds[mid].date+' – '+ds[ds.length-1].date+'. ★ parinktas tik pagal validacijos prizus. Teste naudoti tik ankstesni tiražai.';$('v103verdict').innerHTML='<b>Validacijoje parinktas:</b> '+selected.name+'. Galutiniame teste '+selected.t.o.p+' priziniai bilietai iš '+selected.t.o.n+', palyginti su '+rand.t.o.p+' vienos atkuriamos atsitiktinės kontrolės. <b>Ribojimai:</b> šie metodai yra žvalgomieji ir jau buvo kuriami matant ankstesnę istoriją; vienas atsitiktinis palyginimas nėra statistinis įrodymas. Porų ir trejetų signalai yra supaprastinti, todėl jų pranašumas nėra patvirtintas. Faktinių istorinių išmokų nėra, todėl grąžos (ROI) neskaičiuojame. LIVE C neįjungtas.'}catch(e){status.textContent='KLAIDA: '+e.message}},20)};
+})();
+</script>
 </body></html>
