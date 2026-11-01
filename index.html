@@ -1559,4 +1559,49 @@ try {
 } catch(e){document.getElementById('c11status').textContent='KLAIDA: '+e.message;}
 };
 })();</script>
+
+<section class="card" id="omegaC12">
+<h2>35. OMEGA V10.2 — metodų patikimumo auditas</h2>
+<p class="muted">Papildomas diagnostinis tyrimas: 26 ir 104 tiražų dažnių metodai, 1 000 nepriklausomų atsitiktinių portfelių kontrolės, metiniai rezultatai ir bilietų sutapimų tikrinimas. LIVE A/B/C užrakinimai nekeičiami. Istoriniai rezultatai naudojami tik vertinimui.</p>
+<button type="button" onclick="omegaC12Run()">Atlikti 1 000 kontrolinių bandymų auditą</button>
+<div class="notice" id="c12status">Auditas dar nepaleistas.</div>
+<div class="scroll"><table><thead><tr><th>Metodas</th><th>Prizai / bilietai</th><th>Vid. MAIN</th><th>Vid. EURO</th><th>3+ MAIN</th><th>Skirtingi MAIN / 15</th></tr></thead><tbody id="c12summary"></tbody></table></div>
+<h3>Rezultatai pagal metus</h3>
+<div class="scroll"><table><thead><tr><th>Metai</th><th>Tiražai</th><th>26: prizai</th><th>104: prizai</th><th>Random mediana (95 % intervalas)</th></tr></thead><tbody id="c12years"></tbody></table></div>
+<div class="notice" id="c12verdict">Šis auditas neteikia įrodymo, kad galima numatyti nepriklausomą atsitiktinį tiražą.</div>
+</section>
+<script>
+(function(){'use strict';
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function random(seed){let x=hash(seed)||1;return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return(x>>>0)/4294967296}}
+function shuffle(a,r){for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function ranking(ds,i,window,field,max){let a=Array(max).fill(0);for(let k=Math.max(0,i-window);k<i;k++)for(const n of ds[k][field])a[n-1]++;return a.map((v,j)=>({n:j+1,v})).sort((x,y)=>y.v-x.v||x.n-y.n).map(x=>x.n)}
+function portfolio(ds,i,win){const m=ranking(ds,i,win,'numbers',50),e=ranking(ds,i,win,'euro',12);return [0,1,2].map(k=>({main:m.slice(k*5,k*5+5),euro:e.slice(k*2,k*2+2)}))}
+function rndportfolio(date,trial){const r=random('OMEGA_V102_'+date+'_'+trial);let m=shuffle(Array.from({length:50},(_,i)=>i+1),r),e=shuffle(Array.from({length:12},(_,i)=>i+1),r);return [0,1,2].map(k=>({main:m.slice(k*5,k*5+5),euro:e.slice(k*2,k*2+2)}))}
+function empty(){return {p:0,m:0,e:0,t:0,three:0,unique:0}}
+function add(o,t,actual){o.unique+=new Set(t.flatMap(x=>x.main)).size;for(const x of t){let m=x.main.filter(n=>actual.numbers.includes(n)).length,e=x.euro.filter(n=>actual.euro.includes(n)).length;o.m+=m;o.e+=e;o.t++;if(m>=3)o.three++;if(m>=3||(m===2&&e>=1)||(m===1&&e===2))o.p++}}
+function pct(sorted,p){return sorted[Math.min(sorted.length-1,Math.max(0,Math.floor(p*(sorted.length-1))))]}
+window.omegaC12Run=function(){
+ const st=document.getElementById('c12status');st.textContent='Skaičiuojama...';
+ setTimeout(function(){try{
+ const raw=(typeof draws!=='undefined'&&Array.isArray(draws)&&draws.length>BASE.length)?draws:BASE;
+ const seen=new Set(),ds=raw.filter(d=>d&&/^\d{4}-\d\d-\d\d$/.test(d.date)&&Array.isArray(d.numbers)&&Array.isArray(d.euro))
+ .map(d=>({date:d.date,numbers:d.numbers.map(Number),euro:d.euro.map(Number)})).sort((a,b)=>a.date.localeCompare(b.date))
+ .filter(d=>{if(seen.has(d.date)||d.date>'2026-10-09'||d.numbers.length!==5||d.euro.length!==2||new Set(d.numbers).size!==5||new Set(d.euro).size!==2||d.numbers.some(n=>n<1||n>50)||d.euro.some(n=>n<1||n>12))return false;seen.add(d.date);return true});
+ const first=ds.findIndex(d=>d.date>='2024-07-05');if(first<104||ds.length-first<50)throw Error('Nepakanka patikrintų istorinių duomenų.');
+ const a=empty(),b=empty(),byYear={},targets=[];
+ for(let i=first;i<ds.length;i++){const d=ds[i],y=d.date.slice(0,4);if(!byYear[y])byYear[y]={a:empty(),b:empty(),random:[],draws:0};const pa=portfolio(ds,i,26),pb=portfolio(ds,i,104);add(a,pa,d);add(b,pb,d);add(byYear[y].a,pa,d);add(byYear[y].b,pb,d);byYear[y].draws++;targets.push(d)}
+ const trials=1000,randomPrizes=[],randomMain=[],randomEuro=[],yearRand={};for(const y of Object.keys(byYear))yearRand[y]=[];
+ for(let trial=0;trial<trials;trial++){let o=empty(),ys={};for(const d of targets){let y=d.date.slice(0,4);if(!ys[y])ys[y]=empty();let t=rndportfolio(d.date,trial);add(o,t,d);add(ys[y],t,d)}randomPrizes.push(o.p);randomMain.push(o.m/o.t);randomEuro.push(o.e/o.t);for(const y of Object.keys(ys))yearRand[y].push(ys[y].p)}
+ randomPrizes.sort((x,y)=>x-y);randomMain.sort((x,y)=>x-y);randomEuro.sort((x,y)=>x-y);
+ const n=targets.length;function row(name,o){return '<tr><td>'+name+'</td><td>'+o.p+' / '+o.t+'</td><td>'+(o.m/o.t).toFixed(3)+'</td><td>'+(o.e/o.t).toFixed(3)+'</td><td>'+o.three+'</td><td>'+(o.unique/n).toFixed(1)+'</td></tr>'}
+ document.getElementById('c12summary').innerHTML=row('Dažnis 26',a)+row('Dažnis 104',b)+'<tr><td>Random (1 000 bandymų mediana)</td><td>'+pct(randomPrizes,.5)+' / '+(n*3)+'</td><td>'+pct(randomMain,.5).toFixed(3)+'</td><td>'+pct(randomEuro,.5).toFixed(3)+'</td><td>—</td><td>15</td></tr>';
+ document.getElementById('c12years').innerHTML=Object.keys(byYear).sort().map(y=>{let z=byYear[y],rr=yearRand[y].sort((x,y)=>x-y);return '<tr><td>'+y+'</td><td>'+z.draws+'</td><td>'+z.a.p+'</td><td>'+z.b.p+'</td><td>'+pct(rr,.5)+' ['+pct(rr,.025)+'; '+pct(rr,.975)+']</td></tr>'}).join('');
+ const p26=(randomPrizes.filter(x=>x>=a.p).length+1)/(trials+1),p104=(randomPrizes.filter(x=>x>=b.p).length+1)/(trials+1);
+ st.textContent='Patikrinta '+n+' tiražų ('+targets[0].date+' – '+targets[n-1].date+'), po 3 bilietus; 1 000 atkuriamų atsitiktinių kontrolinių portfelių. Jokie ateities tiražai neįtraukti į prognozių skaičiavimą.';
+ document.getElementById('c12verdict').innerHTML='<b>Atsitiktinės kontrolės:</b> priziniai bilietai – mediana '+pct(randomPrizes,.5)+', 95 % intervalas ['+pct(randomPrizes,.025)+'; '+pct(randomPrizes,.975)+']. Dažnis 26: '+a.p+' prizai, kontrolinių bandymų su ≥ tiek prizų dalis ≈ '+p26.toFixed(3)+'. Dažnis 104: '+b.p+', dalis ≈ '+p104.toFixed(3)+'. <b>Svarbu:</b> šios dalys yra diagnostinės, ne patvirtintos p reikšmės: metodai jau buvo nagrinėti naudojant istorinius rezultatus. Jei negaunamas tvirtas ir stabilus pranašumas, C LIVE nejungiamas. 26/104 modeliai sudaro 15 skirtingų MAIN skaičių ir 6 skirtingus EURO, todėl tikrinamas ne vien skaičių padengimas, bet ir istorinis reitingas.';
+ }catch(e){st.textContent='KLAIDA: '+e.message}},30);
+};
+})();
+</script>
 </body></html>
