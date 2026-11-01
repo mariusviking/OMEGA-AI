@@ -1521,4 +1521,42 @@ function score(ds,start,end,method){let m=0,e=0,pr=0,n=0;for(let i=start;i<end;i
 window.omegaCtest=function(){try{let ds=(typeof draws!=='undefined'&&Array.isArray(draws)&&draws.length>BASE.length?draws:BASE).filter(d=>d&&d.date&&Array.isArray(d.numbers)&&Array.isArray(d.euro)).map(d=>({date:d.date,numbers:d.numbers,euro:d.euro})).sort((a,b)=>a.date.localeCompare(b.date));let seen=new Set();ds=ds.filter(d=>{if(seen.has(d.date))return false;seen.add(d.date);return d.numbers.length===5&&d.euro.length===2});let first=ds.findIndex(d=>d.date>='2022-04-01');if(first<104)throw Error('Per mažai duomenų chronologiniam testui');let mid=first+Math.floor((ds.length-first)/2),last=ds.length;if(last-mid<25)throw Error('Per mažai atskiro testavimo tiražų');let methods=['Dažnis 26','Dažnis 52','Dažnis 104','Poros 104','Random'];let rows=methods.map(name=>({name,v:score(ds,first,mid,name),t:score(ds,mid,last,name)}));let selected=rows.filter(x=>x.name!=='Random').sort((a,b)=>(b.v.m+b.v.e)-(a.v.m+a.v.e))[0],random=rows.find(x=>x.name==='Random');let f=x=>x.toFixed(2);document.getElementById('omegaCrows').innerHTML=rows.map(x=>'<tr><td>'+x.name+(x.name===selected.name?' ★':'')+'</td><td>'+f(x.v.m/x.v.n)+'</td><td>'+f(x.v.e/x.v.n)+'</td><td>'+f(x.t.m/x.t.n)+'</td><td>'+f(x.t.e/x.t.n)+'</td><td>'+x.t.pr+'/'+x.t.n+'</td></tr>').join('');document.getElementById('omegaCstatus').textContent='Duomenų: '+ds.length+' tiražų ('+ds[0].date+' – '+ds[last-1].date+'). Validacija: '+ds[first].date+' – '+ds[mid-1].date+' ('+(mid-first)+' tiražų); neliečiamas testas: '+ds[mid].date+' – '+ds[last-1].date+' ('+(last-mid)+' tiražų). ★ parinktas tik pagal validaciją.';let diff=(selected.t.m+selected.t.e)/selected.t.n-(random.t.m+random.t.e)/random.t.n;document.getElementById('omegaCconclusion').innerHTML='<b>C kandidatas: '+selected.name+'.</b> Atskirame teste vidutinis MAIN+EURO pataikymų skirtumas nuo Random vienam bilietui: '+(diff>=0?'+':'')+f(diff)+'. Tai aprašomasis rezultatas, ne statistiškai patvirtintas pranašumas. Metodai išbandomi istoriškai; C LIVE bilietai automatiškai nekuriami, kad nebūtų tariamo išankstinio užrakinimo.'}catch(err){document.getElementById('omegaCstatus').textContent='KLAIDA: '+err.message}};
 })();
 </script>
+
+<section class="card" id="omegaC11"><h2>34. OMEGA V10.1 — išplėstinis C istorinis tyrimas</h2>
+<p class="muted">Eksperimentas, ne LIVE prognozė. Nauji metodai vertinami chronologiškai: ankstyvas laikotarpis metodui pasirinkti, vėlesnis – atskiram patikrinimui. Vieno tiražo trys bilietai vertinami kaip vienas portfelis. A/B užrakinimai neliečiami.</p>
+<button type="button" onclick="omegaC11Run()">Paleisti išplėstinį istorinį testą</button>
+<div id="c11status" class="notice">Testas dar nepaleistas.</div>
+<div class="scroll"><table><thead><tr><th>Metodas</th><th>Validacija: prizai / 3 bil.</th><th>Testas: prizai / 3 bil.</th><th>Testas: vid. MAIN</th><th>Testas: vid. EURO</th><th>Testas: 3+ MAIN bil.</th></tr></thead><tbody id="c11rows"></tbody></table></div>
+<div id="c11result" class="notice">Metodas bus pasirenkamas tik pagal validaciją, o ne pagal vėlesnio testo rezultatus.</div></section>
+<script>
+(function(){'use strict';
+function hash(s){let h=2166136261;for(let c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+function rand(s){let a=hash(s)||1;return ()=>{a^=a<<13;a^=a>>>17;a^=a<<5;return(a>>>0)/4294967296}}
+function shuffle(a,r){for(let i=a.length-1;i>0;i--){let j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function rank(hist,method,field,max){let win=method==='Trumpas 26'?26:method==='Ilgas 104'?104:52, h=hist.slice(-win),a=Array(max).fill(0),last=Array(max).fill(win+1);h.forEach((d,i)=>d[field].forEach(n=>{a[n-1]++;last[n-1]=h.length-1-i}));
+let sc=a.map((v,i)=>{if(method==='Intervalai 52')return last[i];if(method==='Retumas 52')return -v;if(method==='Pora + dažnis 52'&&field==='numbers'){let co=0;h.forEach(d=>{if(d.numbers.includes(i+1))co+=d.numbers.length-1});return v+co*.15}return v});return sc.map((v,i)=>({v,n:i+1})).sort((x,y)=>y.v-x.v||x.n-y.n).map(x=>x.n)}
+function make(hist,method,date){let m,e;if(method==='Random'){let r=rand('C11_RANDOM_'+date);m=shuffle(Array.from({length:50},(_,i)=>i+1),r);e=shuffle(Array.from({length:12},(_,i)=>i+1),r)}else{m=rank(hist,method,'numbers',50);e=rank(hist,method,'euro',12)}return Array.from({length:3},(_,i)=>({main:m.slice(i*5,i*5+5),euro:e.slice(i*2,i*2+2)}))}
+function evaluate(ds,lo,hi,method){let prizes=0,main=0,euro=0,three=0;for(let i=lo;i<hi;i++){let t=make(ds.slice(0,i),method,ds[i].date);for(let x of t){let m=x.main.filter(n=>ds[i].numbers.includes(n)).length,e=x.euro.filter(n=>ds[i].euro.includes(n)).length;main+=m;euro+=e;if(m>=3)three++;if(m>=3||(m===2&&e>=1)||(m===1&&e===2))prizes++}}return {prizes,main:main/((hi-lo)*3),euro:euro/((hi-lo)*3),three,n:(hi-lo)*3}}
+window.omegaC11Run=function(){
+try {
+ const raw=(typeof draws!=='undefined' && Array.isArray(draws) && draws.length>BASE.length)?draws:BASE;
+ const seen=new Set();
+ const ds=raw.filter(d=>d && d.date && Array.isArray(d.numbers) && Array.isArray(d.euro))
+ .map(d=>({date:d.date,numbers:d.numbers.map(Number),euro:d.euro.map(Number)}))
+ .sort((a,b)=>a.date.localeCompare(b.date))
+ .filter(d=>{if(seen.has(d.date))return false;seen.add(d.date);return d.numbers.length===5 && d.euro.length===2 && new Set(d.numbers).size===5 && new Set(d.euro).size===2;});
+ const first=ds.findIndex(d=>d.date>='2022-04-01');
+ if(first<104 || ds.length-first<100)throw Error('Nepakanka istorinių tiražų');
+ const mid=first+Math.floor((ds.length-first)/2);
+ const names=['Trumpas 26','Dažnis 52','Ilgas 104','Pora + dažnis 52','Intervalai 52','Retumas 52','Random'];
+ const rows=names.map(name=>({name,v:evaluate(ds,first,mid,name),t:evaluate(ds,mid,ds.length,name)}));
+ const chosen=rows.filter(x=>x.name!=='Random').sort((a,b)=>b.v.prizes-a.v.prizes||b.v.main-a.v.main)[0];
+ const control=rows.find(x=>x.name==='Random');
+ document.getElementById('c11rows').innerHTML=rows.map(x=>'<tr><td>'+x.name+(x===chosen?' ★':'')+'</td><td>'+x.v.prizes+'/'+x.v.n+'</td><td>'+x.t.prizes+'/'+x.t.n+'</td><td>'+x.t.main.toFixed(3)+'</td><td>'+x.t.euro.toFixed(3)+'</td><td>'+x.t.three+'</td></tr>').join('');
+ document.getElementById('c11status').textContent='Validacija: '+ds[first].date+' – '+ds[mid-1].date+'; testas: '+ds[mid].date+' – '+ds[ds.length-1].date+'. Prognozės naudojo tik ankstesnius tiražus.';
+ const delta=chosen.t.prizes-control.t.prizes;
+ document.getElementById('c11result').textContent='Validacijoje pasirinkta '+chosen.name+'. Teste: '+chosen.t.prizes+'/'+chosen.t.n+' priziniai; Random: '+control.t.prizes+'/'+control.t.n+'; skirtumas '+delta+'. Tai nepatvirtina prognozavimo pranašumo: reikalingi nepriklausomi būsimi tiražai ir kelios atsitiktinės kontrolės.';
+} catch(e){document.getElementById('c11status').textContent='KLAIDA: '+e.message;}
+};
+})();</script>
 </body></html>
