@@ -1667,14 +1667,14 @@ $('v104verdict').innerHTML='<b>Dažnis 104:</b> '+a.p+' prizinių bilietų, atsi
 </script>
 
 <section id="omega-v105">
-<h2>38. OMEGA V10.5.2 — pataisytas tiražų auditas</h2>
+<h2>38. OMEGA V10.5.3 — saugesnis tiražų auditas</h2>
 <p class="muted">Atskiras tyrimas: metodai „Dažnis 26“ ir „Dažnis 104“ nekeičia A/B ar ankstesnių LIVE užrakinimų. Istoriniai segmentai yra <b>diagnostiniai</b>, nes metodai jau buvo nagrinėti žinant istoriją. Tik po šio etapo užrakinti ir vėliau įvesti tiražai sudaro tikrą būsimą patikrą.</p>
 <button type="button" onclick="omegaV105History()">Patikrinti istorinių laikotarpių stabilumą</button>
 <div class="notice" id="v105status">Istorinis tyrimas dar nepaleistas.</div>
 <div class="scroll"><table><thead><tr><th>Metai</th><th>Tiražų</th><th>26: prizai</th><th>104: prizai</th><th>26: ≥3 MAIN</th><th>104: ≥3 MAIN</th><th>26 − 104 (prizai)</th></tr></thead><tbody id="v105years"></tbody></table></div>
 <div class="notice" id="v105verdict">Svarbu: rezultatų pagal metus negalima laikyti nepriklausomais patvirtinimais.</div>
 <h3>Užrakintas būsimas eksperimentas (nekeičia A/B)</h3>
-<p class="muted">Prieš traukimą užrakink abiejų metodų po 3 derinius. Po traukimo įrašyk faktą ir palygink. Įrašai saugomi tik šios naršyklės localStorage; eksportuok JSON ir saugok nepriklausomai, nes localStorage nėra neklastojamas auditas. Šis eksperimentas nesukuria „C LIVE“.</p>
+<p class="muted">Prieš traukimą užrakink abiejų metodų po 3 derinius. Po traukimo įrašyk faktą ir palygink. Įrašai saugomi tik šios naršyklės localStorage; eksportuok JSON ir saugok nepriklausomai, nes localStorage nėra neklastojamas auditas. Šis eksperimentas nesukuria „C LIVE“. V10.5.3 stiprina importo patikrą, nekeičia prognozavimo algoritmų ir esamų įrašų.</p>
 <label for="v105date">Būsimo tiražo data (Danijos laiku)</label><input id="v105date" type="date" />
 <button type="button" onclick="omegaV105Lock()">UŽRAKINTI 26 ir 104 palyginimą prieš tiražą</button>
 <div class="notice" id="v105lockstatus">Dar nėra šio eksperimento užrakinimų.</div>
@@ -1684,7 +1684,7 @@ $('v104verdict').innerHTML='<b>Dažnis 104:</b> '+a.p+' prizinių bilietų, atsi
 <label for="v105main">MAIN (5 skirtingi, 1–50)</label><input id="v105main" placeholder="pvz. 4 17 23 30 45" />
 <label for="v105euro">EURO (2 skirtingi, 1–12)</label><input id="v105euro" placeholder="pvz. 2 4" />
 <button type="button" onclick="omegaV105Settle()">Patvirtinti faktą (vieną kartą)</button>
-<button type="button" onclick="omegaV105Export()">Eksportuoti eksperimento JSON</button><label for="v105import">Atkurti ankstesnius užrakinimus iš JSON (neperrašant)</label><input type="file" id="v105import" accept=".json,application/json" onchange="omegaV105Import(this)" /><div class="notice">Svarbu: 2026-11-06 užrakinimas jau atliktas naudojant duomenis tik iki 2026-10-09. Įrašius 2026-11-03 faktą, ankstesnis užrakinimas nebus perskaičiuotas. Ateities prognozės naudos naujai patvirtintą faktą.</div>
+<button type="button" onclick="omegaV105Audit()">Patikrinti registro vientisumą</button><div id="v105integrity" class="notice">Registro patikra dar neatlikta.</div><button type="button" onclick="omegaV105Export()">Eksportuoti eksperimento JSON</button><label for="v105import">Atkurti ankstesnius užrakinimus iš JSON (neperrašant)</label><input type="file" id="v105import" accept=".json,application/json" onchange="omegaV105Import(this)" /><div class="notice">Svarbu: 2026-11-06 užrakinimas jau atliktas naudojant duomenis tik iki 2026-10-09. Įrašius 2026-11-03 faktą, ankstesnis užrakinimas nebus perskaičiuotas. Ateities prognozės naudos naujai patvirtintą faktą.</div>
 <div class="notice" id="v105resultstatus">Dar nėra įvesto faktinio rezultato. Tiražo dieną patvirtinti galima nuo 22:00 Danijos laiku. 1+2 yra prizinis derinys.</div>
 </section>
 <script>
@@ -1717,9 +1717,33 @@ $('v105resultdate').addEventListener('change',selection);
 window.omegaV105History=function(){try{let a=ds(),first=a.findIndex(x=>x.date>='2024-07-05');if(first<104)throw Error('Trūksta duomenų');let years={};for(let i=first;i<a.length;i++){let d=a[i],y=d.date.slice(0,4);if(!years[y])years[y]={n:0,p26:0,p104:0,m26:0,m104:0};years[y].n++;for(let w of [26,104])for(let t of ticket(a.slice(0,i),w)){let h=hits(t,d);years[y]['p'+w]+=h.prize;years[y]['m'+w]+=(h.m>=3?1:0)}}$('v105years').innerHTML=Object.keys(years).sort().map(y=>{let o=years[y];return '<tr><td>'+y+'</td><td>'+o.n+'</td><td>'+o.p26+'</td><td>'+o.p104+'</td><td>'+o.m26+'</td><td>'+o.m104+'</td><td>'+(o.p26-o.p104)+'</td></tr>'}).join('');let vals=Object.values(years),wins=vals.filter(o=>o.p26>o.p104).length;let total26=vals.reduce((a,o)=>a+o.p26,0),total104=vals.reduce((a,o)=>a+o.p104,0);$('v105status').textContent='Istoriniai segmentai: '+Object.keys(years).join(', ')+'. Iš viso '+vals.reduce((a,o)=>a+o.n,0)+' tiražų. Kiekvienam tiražui naudoti tik ankstesni duomenys.';$('v105verdict').textContent='Dažnis 26: '+total26+' priziniai bilietai; Dažnis 104: '+total104+'. 26 laimėjo '+wins+' iš '+vals.length+' metinių segmentų. Tai nėra nepriklausomas metodų patvirtinimas: abu metodai jau nagrinėti pagal šią istoriją. Sprendimui dėl pranašumo būtini būsimi užrakinti tiražai.'}catch(e){$('v105status').textContent='KLAIDA: '+e.message}};
 window.omegaV105Lock=function(){try{let date=$('v105date').value;if(!validDate(date)||!isDraw(date))throw Error('Pasirink antradienio arba penktadienio tiražo datą');if(date<=dkToday())throw Error('Užrakinti leidžiama tik būsimą tiražą, ne šiandien ar praeityje');let a=read();if(a.some(x=>x.date===date))throw Error('Ši data jau užrakinta; pakartotinai keisti negalima');if(a.some(x=>x.date<date&&!x.actual&&drawResultAllowed(x.date)))throw Error('Pirmiausia įrašyk ankstesnio užrakinto tiražo faktą. Taip išvengsi pasenusių duomenų.');let hist=ds().filter(x=>x.date<date);for(let r of a.filter(x=>x.actual&&x.date<date))if(!hist.some(x=>x.date===r.date))hist.push({date:r.date,numbers:r.actual.numbers,euro:r.actual.euro});hist.sort((a,b)=>a.date.localeCompare(b.date));if(hist.length<104)throw Error('Per mažai ankstesnių tiražų');let last=hist[hist.length-1].date;let entry={date,lockedAt:new Date().toISOString(),dataThrough:last,t26:ticket(hist,26),t104:ticket(hist,104),actual:null};a.push(entry);save(a);show();$('v105lockstatus').textContent='UŽRAKINTA '+date+'; duomenys iki '+last+'; laikas '+entry.lockedAt+'. Išsaugok JSON arba ekrano kopiją prieš tiražą.'}catch(e){$('v105lockstatus').textContent='KLAIDA: '+e.message}};
 window.omegaV105Settle=function(){try{let date=$('v105resultdate').value,a=read(),r=a.find(x=>x.date===date);if(!r)throw Error('Pasirink užrakintą tiražą iš sąrašo');if(r.actual)throw Error('Faktinis rezultatas jau užfiksuotas. Perrašyti draudžiama');if(!drawResultAllowed(date))throw Error('Faktą leidžiama įrašyti tiražo dieną nuo 22:00 Danijos laiku arba vėliau. Patikrink oficialų rezultatą prieš patvirtindamas.');let numbers=parse($('v105main').value,5,50),euro=parse($('v105euro').value,2,12);if(!confirm('Patvirtinti '+date+' rezultatą: '+numbers.join('·')+' + '+euro.join('·')+'? Po patvirtinimo šio įrašo pakeisti negalėsi.'))return;r.actual={numbers,euro,recordedAt:new Date().toISOString(),source:'naudotojo įvesta, nepatikrinta nepriklausomai'};save(a);show();let p=w=>r['t'+w].reduce((z,t)=>z+hits(t,r.actual).prize,0);$('v105resultstatus').textContent=date+': '+numbers.join('·')+' + '+euro.join('·')+'. Priziniai: 26 = '+p(26)+'/3; 104 = '+p(104)+'/3. Rezultatas užfiksuotas, perrašymas išjungtas.'}catch(e){$('v105resultstatus').textContent='KLAIDA: '+e.message}};
-window.omegaV105Import=async function(input){try{let f=input.files&&input.files[0];if(!f)return;let payload=JSON.parse(await f.text()), incoming=payload.entries;if(!Array.isArray(incoming)||!incoming.length)throw Error('JSON neturi entries masyvo');let a=read(),added=0,duplicates=0;for(let r of incoming){if(!validDate(r.date)||!isDraw(r.date)||!Array.isArray(r.t26)||r.t26.length!==3||!Array.isArray(r.t104)||r.t104.length!==3)throw Error('Netinkamas įrašas: '+r.date);if(a.some(x=>x.date===r.date)){duplicates++;continue}a.push(r);added++}if(!confirm('Importuoti '+added+' naujus užrakinimus? '+duplicates+' jau esančių datų bus praleista; niekas neperrašoma.'))return;save(a);show();$('v105resultstatus').textContent='Atkurta: '+added+'. Praleista jau esančių: '+duplicates+'.';}catch(e){$('v105resultstatus').textContent='IMPORTO KLAIDA: '+e.message}finally{input.value=''}};
-window.omegaV105Export=function(){let b=new Blob([JSON.stringify({project:'OMEGA V10.5.2',exportedAt:new Date().toISOString(),entries:read()},null,2)],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='OMEGA_V10_5_2_auditas.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
-show();
+function validateEntry(r){
+ if(!r||typeof r!=='object'||!validDate(r.date)||!isDraw(r.date))throw Error('Netinkama tiražo data');
+ if(!validDate(r.dataThrough)||r.dataThrough>=r.date)throw Error(r.date+': netinkama duomenų pabaigos data');
+ if(typeof r.lockedAt!=='string'||!Number.isFinite(Date.parse(r.lockedAt)))throw Error(r.date+': nėra tinkamo užrakinimo laiko');
+ // Imported timestamps are evidence claims, not cryptographic proof.
+ if(new Date(r.lockedAt).getTime()>=new Date(r.date+'T23:59:59+01:00').getTime())throw Error(r.date+': užrakinimo laikas po tiražo datos');
+ for(let w of [26,104]){
+  let ts=r['t'+w];if(!Array.isArray(ts)||ts.length!==3)throw Error(r.date+': Dažnis '+w+' turi turėti 3 bilietus');
+  for(let t of ts){if(!t||!Array.isArray(t.m)||!Array.isArray(t.e)||t.m.length!==5||t.e.length!==2||new Set(t.m).size!==5||new Set(t.e).size!==2||t.m.some(n=>!Number.isInteger(n)||n<1||n>50)||t.e.some(n=>!Number.isInteger(n)||n<1||n>12))throw Error(r.date+': netinkamas Dažnis '+w+' bilietas')}
+ }
+ if(r.actual!==null){let v=r.actual;if(!v||!Array.isArray(v.numbers)||!Array.isArray(v.euro)||v.numbers.length!==5||v.euro.length!==2||new Set(v.numbers).size!==5||new Set(v.euro).size!==2||v.numbers.some(n=>!Number.isInteger(n)||n<1||n>50)||v.euro.some(n=>!Number.isInteger(n)||n<1||n>12))throw Error(r.date+': netinkamas faktinis rezultatas')}
+ return true;
+}
+function auditRegistry(){let entries=read(),issues=[],dates=new Set();for(let r of entries){try{validateEntry(r);if(dates.has(r.date))issues.push(r.date+': dubliuota data');dates.add(r.date)}catch(e){issues.push(e.message)}}let el=$('v105integrity');if(el)el.textContent=issues.length?'PATIKROS ĮSPĖJIMAI ('+issues.length+'): '+issues.slice(0,8).join(' | '):'Patikrinta '+entries.length+' įrašų struktūra; klaidų neaptikta. Tai nepatvirtina jų autentiškumo ar istorinio užrakinimo laiko.';return issues.length===0}
+window.omegaV105Audit=auditRegistry;
+window.omegaV105Import=async function(input){try{
+ let f=input.files&&input.files[0];if(!f)return;
+ if(f.size>5*1024*1024)throw Error('JSON failas per didelis (maks. 5 MB)');
+ let payload=JSON.parse(await f.text());if(!payload||!Array.isArray(payload.entries)||!payload.entries.length)throw Error('JSON neturi entries masyvo');
+ if(payload.entries.length>10000)throw Error('Per daug įrašų');
+ let a=read(),existing=new Set(a.map(x=>x.date)),seen=new Set(),fresh=[],duplicates=0;
+ for(let r of payload.entries){validateEntry(r);if(seen.has(r.date))throw Error('Importo faile dubliuota data: '+r.date);seen.add(r.date);if(existing.has(r.date)){duplicates++;continue}fresh.push(r)}
+ if(!confirm('Importuoti '+fresh.length+' naujų įrašų? '+duplicates+' esamų datų bus praleista. Esami įrašai nebus keičiami. Importuoto užrakinimo laiko autentiškumas negali būti patvirtintas.'))return;
+ save(a.concat(fresh));show();auditRegistry();$('v105resultstatus').textContent='Importuota: '+fresh.length+'. Praleista: '+duplicates+'. Esami įrašai nepakeisti.';
+ }catch(e){$('v105resultstatus').textContent='IMPORTO KLAIDA: '+e.message}finally{input.value=''}};
+window.omegaV105Export=function(){let b=new Blob([JSON.stringify({project:'OMEGA V10.5.3',exportedAt:new Date().toISOString(),entries:read()},null,2)],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='OMEGA_V10_5_3_auditas.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
+show();auditRegistry();
 })();
 </script>
 
