@@ -1667,7 +1667,7 @@ $('v104verdict').innerHTML='<b>Dažnis 104:</b> '+a.p+' prizinių bilietų, atsi
 </script>
 
 <section id="omega-v105">
-<h2>38. OMEGA V10.5 — stabilumo ir būsimų tiražų patikra</h2>
+<h2>38. OMEGA V10.5.1 — stabilumo ir būsimų tiražų patikra</h2>
 <p class="muted">Atskiras tyrimas: metodai „Dažnis 26“ ir „Dažnis 104“ nekeičia A/B ar ankstesnių LIVE užrakinimų. Istoriniai segmentai yra <b>diagnostiniai</b>, nes metodai jau buvo nagrinėti žinant istoriją. Tik po šio etapo užrakinti ir vėliau įvesti tiražai sudaro tikrą būsimą patikrą.</p>
 <button type="button" onclick="omegaV105History()">Patikrinti istorinių laikotarpių stabilumą</button>
 <div class="notice" id="v105status">Istorinis tyrimas dar nepaleistas.</div>
@@ -1679,13 +1679,13 @@ $('v104verdict').innerHTML='<b>Dažnis 104:</b> '+a.p+' prizinių bilietų, atsi
 <button type="button" onclick="omegaV105Lock()">UŽRAKINTI 26 ir 104 palyginimą prieš tiražą</button>
 <div class="notice" id="v105lockstatus">Dar nėra šio eksperimento užrakinimų.</div>
 <div class="scroll"><table><thead><tr><th>Data</th><th>Metodas</th><th>3 užrakinti bilietai</th><th>Rezultatas</th></tr></thead><tbody id="v105registry"></tbody></table></div>
-<h3>Įrašyti faktą tik po tiražo</h3>
+<h3>Įrašyti faktą po tiražo (nuo 22:00 Danijos laiku)</h3>
 <label for="v105resultdate">Užrakinto tiražo data</label><input id="v105resultdate" type="date" />
 <label for="v105main">MAIN (5 skirtingi, 1–50)</label><input id="v105main" placeholder="pvz. 4 17 23 30 45" />
 <label for="v105euro">EURO (2 skirtingi, 1–12)</label><input id="v105euro" placeholder="pvz. 2 4" />
 <button type="button" onclick="omegaV105Settle()">Patvirtinti faktą (vieną kartą)</button>
 <button type="button" onclick="omegaV105Export()">Eksportuoti eksperimento JSON</button>
-<div class="notice" id="v105resultstatus">Dar nėra įvesto faktinio rezultato.</div>
+<div class="notice" id="v105resultstatus">Dar nėra įvesto faktinio rezultato. Tiražo dieną patvirtinti galima nuo 22:00 Danijos laiku. 1+2 yra prizinis derinys.</div>
 </section>
 <script>
 (function(){'use strict';
@@ -1693,6 +1693,8 @@ const $=id=>document.getElementById(id), KEY='OMEGA_V105_FORWARD_REGISTRY_V1';
 function read(){try{const v=JSON.parse(localStorage.getItem(KEY)||'[]');return Array.isArray(v)?v:[]}catch(e){return []}}
 function save(v){localStorage.setItem(KEY,JSON.stringify(v))}
 function dkToday(){return new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Copenhagen',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())}
+function dkHour(){return Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Copenhagen',hour:'2-digit',hourCycle:'h23'}).format(new Date()))}
+function drawResultAllowed(date){const today=dkToday();return date<today||(date===today&&dkHour()>=22)}
 function validDate(s){if(!/^\d{4}-\d\d-\d\d$/.test(s))return false;let d=new Date(s+'T12:00:00Z');return !isNaN(d)&&d.toISOString().slice(0,10)===s}
 function isDraw(s){return [2,5].includes(new Date(s+'T12:00:00Z').getUTCDay())}
 function parse(s,n,max){let a=(s||'').trim().split(/[\s,;·]+/).map(Number);if(a.length!==n||new Set(a).size!==n||a.some(x=>!Number.isInteger(x)||x<1||x>max))throw Error('Reikia '+n+' skirtingų skaičių nuo 1 iki '+max);return a.sort((x,y)=>x-y)}
@@ -1702,8 +1704,8 @@ function hits(t,d){let m=t.m.filter(x=>d.numbers.includes(x)).length,e=t.e.filte
 function show(){let a=read();$('v105registry').innerHTML=a.map(r=>[26,104].map(w=>'<tr><td>'+r.date+'</td><td>Dažnis '+w+'</td><td>'+r['t'+w].map(t=>t.m.join('·')+' + '+t.e.join('·')).join('<br>')+'</td><td>'+(r.actual?r['t'+w].map(t=>{let h=hits(t,r.actual);return h.m+'+'+h.e+(h.prize?' ★':'')}).join('; '):'Laukia')+'</td></tr>').join('')).join('');$('v105lockstatus').textContent='Užrakinimų: '+a.length+'. Užbaigtų: '+a.filter(x=>x.actual).length+'. Duomenų bazė užrakinimo metu fiksuojama pagal paskutinę žinomą datą.'}
 window.omegaV105History=function(){try{let a=ds(),first=a.findIndex(x=>x.date>='2024-07-05');if(first<104)throw Error('Trūksta duomenų');let years={};for(let i=first;i<a.length;i++){let d=a[i],y=d.date.slice(0,4);if(!years[y])years[y]={n:0,p26:0,p104:0,m26:0,m104:0};years[y].n++;for(let w of [26,104])for(let t of ticket(a.slice(0,i),w)){let h=hits(t,d);years[y]['p'+w]+=h.prize;years[y]['m'+w]+=(h.m>=3?1:0)}}$('v105years').innerHTML=Object.keys(years).sort().map(y=>{let o=years[y];return '<tr><td>'+y+'</td><td>'+o.n+'</td><td>'+o.p26+'</td><td>'+o.p104+'</td><td>'+o.m26+'</td><td>'+o.m104+'</td><td>'+(o.p26-o.p104)+'</td></tr>'}).join('');let vals=Object.values(years),wins=vals.filter(o=>o.p26>o.p104).length;let total26=vals.reduce((a,o)=>a+o.p26,0),total104=vals.reduce((a,o)=>a+o.p104,0);$('v105status').textContent='Istoriniai segmentai: '+Object.keys(years).join(', ')+'. Iš viso '+vals.reduce((a,o)=>a+o.n,0)+' tiražų. Kiekvienam tiražui naudoti tik ankstesni duomenys.';$('v105verdict').textContent='Dažnis 26: '+total26+' priziniai bilietai; Dažnis 104: '+total104+'. 26 laimėjo '+wins+' iš '+vals.length+' metinių segmentų. Tai nėra nepriklausomas metodų patvirtinimas: abu metodai jau nagrinėti pagal šią istoriją. Sprendimui dėl pranašumo būtini būsimi užrakinti tiražai.'}catch(e){$('v105status').textContent='KLAIDA: '+e.message}};
 window.omegaV105Lock=function(){try{let date=$('v105date').value;if(!validDate(date)||!isDraw(date))throw Error('Pasirink antradienio arba penktadienio tiražo datą');if(date<=dkToday())throw Error('Užrakinti leidžiama tik būsimą tiražą, ne šiandien ar praeityje');let a=read();if(a.some(x=>x.date===date))throw Error('Ši data jau užrakinta; pakartotinai keisti negalima');let hist=ds().filter(x=>x.date<date);for(let r of a.filter(x=>x.actual&&x.date<date))if(!hist.some(x=>x.date===r.date))hist.push({date:r.date,numbers:r.actual.numbers,euro:r.actual.euro});hist.sort((a,b)=>a.date.localeCompare(b.date));if(hist.length<104)throw Error('Per mažai ankstesnių tiražų');let last=hist[hist.length-1].date;let entry={date,lockedAt:new Date().toISOString(),dataThrough:last,t26:ticket(hist,26),t104:ticket(hist,104),actual:null};a.push(entry);save(a);show();$('v105lockstatus').textContent='UŽRAKINTA '+date+'; duomenys iki '+last+'; laikas '+entry.lockedAt+'. Išsaugok JSON arba ekrano kopiją prieš tiražą.'}catch(e){$('v105lockstatus').textContent='KLAIDA: '+e.message}};
-window.omegaV105Settle=function(){try{let date=$('v105resultdate').value,a=read(),r=a.find(x=>x.date===date);if(!r)throw Error('Pirmiausia turi būti užrakinimas šiai datai');if(r.actual)throw Error('Faktinis rezultatas jau užfiksuotas. Perrašyti draudžiama');if(date>=dkToday())throw Error('Faktą leidžiama įrašyti tik po tiražo dienos');let numbers=parse($('v105main').value,5,50),euro=parse($('v105euro').value,2,12);r.actual={numbers,euro,recordedAt:new Date().toISOString(),source:'naudotojo įvesta, nepatikrinta nepriklausomai'};save(a);show();let p=w=>r['t'+w].reduce((z,t)=>z+hits(t,r.actual).prize,0);$('v105resultstatus').textContent=date+': '+numbers.join('·')+' + '+euro.join('·')+'. Priziniai: 26 = '+p(26)+'/3; 104 = '+p(104)+'/3. Rezultatas užfiksuotas, perrašymas išjungtas.'}catch(e){$('v105resultstatus').textContent='KLAIDA: '+e.message}};
-window.omegaV105Export=function(){let b=new Blob([JSON.stringify({project:'OMEGA V10.5',exportedAt:new Date().toISOString(),entries:read()},null,2)],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='OMEGA_V10_5_auditas.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
+window.omegaV105Settle=function(){try{let date=$('v105resultdate').value,a=read(),r=a.find(x=>x.date===date);if(!r)throw Error('Pirmiausia turi būti užrakinimas šiai datai');if(r.actual)throw Error('Faktinis rezultatas jau užfiksuotas. Perrašyti draudžiama');if(!drawResultAllowed(date))throw Error('Faktą leidžiama įrašyti tiražo dieną nuo 22:00 Danijos laiku arba vėliau. Patikrink oficialų rezultatą prieš patvirtindamas.');let numbers=parse($('v105main').value,5,50),euro=parse($('v105euro').value,2,12);r.actual={numbers,euro,recordedAt:new Date().toISOString(),source:'naudotojo įvesta, nepatikrinta nepriklausomai'};save(a);show();let p=w=>r['t'+w].reduce((z,t)=>z+hits(t,r.actual).prize,0);$('v105resultstatus').textContent=date+': '+numbers.join('·')+' + '+euro.join('·')+'. Priziniai: 26 = '+p(26)+'/3; 104 = '+p(104)+'/3. Rezultatas užfiksuotas, perrašymas išjungtas.'}catch(e){$('v105resultstatus').textContent='KLAIDA: '+e.message}};
+window.omegaV105Export=function(){let b=new Blob([JSON.stringify({project:'OMEGA V10.5.1',exportedAt:new Date().toISOString(),entries:read()},null,2)],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='OMEGA_V10_5_1_auditas.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
 show();
 })();
 </script>
