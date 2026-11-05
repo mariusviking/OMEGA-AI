@@ -2001,4 +2001,53 @@ window.omega111Run=function(){let st=$('v111status');st.textContent='Skaičiuoja
 })();
 </script>
 
+
+<section class="card" id="omega112">
+<h2>OMEGA V11.2 — prognozių atrankos bandymas</h2>
+<p class="muted">Dėmesys skiriamas MAIN ir EURO parinkimo taisyklėms, jų chronologiniam palyginimui ir atsitiktinei kontrolei. Istoriniai rezultatai neįrodo, kad skaičiai taps labiau tikėtini kitame nepriklausomame tiraže. „Porų dažnis“ neįtraukiamas, nes V11.1 parodė, kad jis dubliuoja „Dažnis 104“.</p>
+<button type="button" onclick="omega112Run()">Paleisti V11.2 prognozių testą</button>
+<div class="notice" id="v112status">Dar nepaleista. LIVE prognozės nekeičiamos.</div>
+<h3>MAIN metodų palyginimas — 2026 m.</h3>
+<p class="muted">Visi metodai naudoja vienodą EURO 52 atranką. Vertinami 3 bilietai per tiražą; skaičiai skaičiuojami tik iš ankstesnių tiražų. Kontrolė: 1 000 atkartojamų atsitiktinių MAIN portfelių, išlaikant 15 nesikartojančių MAIN skaičių.</p>
+<div class="scroll"><table><thead><tr><th>MAIN atranka</th><th>Priziniai bilietai</th><th>≥3 MAIN</th><th>MAIN pataikymai</th><th>Kontrolės dalis ≥ rezultato</th></tr></thead><tbody id="v112main"></tbody></table></div>
+<div class="notice" id="v112maincontrol">Laukiama MAIN patikros.</div>
+<h3>EURO atrankos palyginimas — 2026 m.</h3>
+<p class="muted">MAIN skaičiai fiksuoti pagal „Naujausių dažnio“ metodą. Lyginami „Dažnis 26“ ir „Naujausių EURO“ (52 tiražai, didesnis svoris naujesniems). Kontrolė: 1 000 atkartojamų atsitiktinių EURO portfelių su 6 nesikartojančiais EURO skaičiais.</p>
+<div class="scroll"><table><thead><tr><th>EURO atranka</th><th>Priziniai bilietai</th><th>EURO pataikymai</th><th>2 EURO bilietai</th><th>Kontrolės dalis ≥ prizų</th></tr></thead><tbody id="v112euro"></tbody></table></div>
+<div class="notice" id="v112eurocontrol">Laukiama EURO patikros.</div>
+<h3>Trys tyrimo bilietai</h3>
+<div class="notice" id="v112forecast">Deriniai pasirodys atlikus patikrą. Jie nėra LIVE užrakinimas.</div>
+<div class="scroll"><table><thead><tr><th>Bilietas</th><th>5 MAIN</th><th>2 EURO</th></tr></thead><tbody id="v112tickets"></tbody></table></div>
+<p class="muted">Tyrimo taisyklė iš anksto: MAIN = „Naujausių dažnis“ (26 tiražai); EURO = „Dažnis 26“ (26 tiražai). Ji čia užfiksuota kaip būsimo palyginimo kandidatė, tačiau buvo pasirinkta jau matant istorinius rezultatus. V11.2 nerašo į localStorage, nekeičia esamų LIVE prognozių ir neįrašo naujų oficialių tiražų. Prognozė po 2026-11-06 negeneruojama, kol į istoriją neįtrauktas oficialus to tiražo rezultatas.</p>
+</section>
+<script>
+(function(){'use strict';
+const $=id=>document.getElementById(id);
+function rng(seed){let x=seed>>>0;return()=>{x^=x<<13;x^=x>>>17;x^=x<<5;return(x>>>0)/4294967296}}
+function shuffle(n,r){let a=Array.from({length:n},(_,i)=>i+1);for(let i=n-1;i>0;i--){let j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function rank(h,field,max,w,recent){let a=h.slice(-w),c=Array(max+1).fill(0);for(let i=0;i<a.length;i++){let wt=recent?(i+1)/a.length:1;for(let n of a[i][field])c[n]+=wt}return Array.from({length:max},(_,i)=>i+1).sort((x,y)=>c[y]-c[x]||x-y)}
+function group(a,per){return [0,1,2].map(i=>a.slice(i*per,i*per+per))}
+function score(m,e,d){let x=m.filter(n=>d.numbers.includes(n)).length,y=e.filter(n=>d.euro.includes(n)).length;return {m:x,e:y,p:+(x>=3||(x===2&&y>=1)||(x===1&&y===2))}}
+function stats(){return {p:0,m:0,e:0,three:0,two:0}}
+function add(o,s){o.p+=s.p;o.m+=s.m;o.e+=s.e;o.three+=+(s.m>=3);o.two+=+(s.e===2)}
+function tail(sorted,val){let l=0,r=sorted.length;while(l<r){let k=(l+r)>>1;if(sorted[k]<val)l=k+1;else r=k}return ((sorted.length-l)*100/sorted.length).toFixed(1)+' %'}
+function interval(a){return '['+a[24]+'; '+a[974]+']'}
+window.omega112Run=function(){let st=$('v112status');st.textContent='Skaičiuojama…';setTimeout(()=>{try{
+ if(typeof window.OMEGA_V108_HISTORY!=='function')throw Error('Nerasta bendros istorijos funkcija');let ds=window.OMEGA_V108_HISTORY();if(!Array.isArray(ds)||ds.length<400||ds[0].date!=='2022-03-25'||ds.at(-1).date!=='2026-11-03')throw Error('Istorija neatitinka 2026-11-03 ribos');
+ let start=ds.findIndex(d=>d.date>='2026-01-02');if(start<104)throw Error('Per trumpa mokymo istorija');
+ let records=[];for(let i=start;i<ds.length;i++){let h=ds.slice(0,i),d=ds[i];records.push({d,main:[group(rank(h,'numbers',50,26,false),5),group(rank(h,'numbers',50,52,false),5),group(rank(h,'numbers',50,104,false),5),group(rank(h,'numbers',50,26,true),5)],e52:group(rank(h,'euro',12,52,false),2),e26:group(rank(h,'euro',12,26,false),2),er:group(rank(h,'euro',12,52,true),2)})}
+ let ms=Array.from({length:4},stats),es=Array.from({length:2},stats);
+ for(let q of records){for(let k=0;k<4;k++)for(let j=0;j<3;j++)add(ms[k],score(q.main[k][j],q.e52[j],q.d));for(let j=0;j<3;j++){add(es[0],score(q.main[3][j],q.e26[j],q.d));add(es[1],score(q.main[3][j],q.er[j],q.d))}}
+ let randomM=[],randomE=[];for(let z=0;z<1000;z++){let r=rng((0xabcddcba^Math.imul(z+1,0x9e3779b9))>>>0),pM=0,pE=0;for(let q of records){let rm=group(shuffle(50,r),5),re=group(shuffle(12,r),2);for(let j=0;j<3;j++){pM+=score(rm[j],q.e52[j],q.d).p;pE+=score(q.main[3][j],re[j],q.d).p}}randomM.push(pM);randomE.push(pE)}randomM.sort((a,b)=>a-b);randomE.sort((a,b)=>a-b);
+ let mn=['Dažnis 26','Dažnis 52','Dažnis 104','Naujausių dažnis'];$('v112main').innerHTML=ms.map((v,i)=>'<tr><td>'+mn[i]+'</td><td>'+v.p+'</td><td>'+v.three+'</td><td>'+v.m+'</td><td>'+tail(randomM,v.p)+'</td></tr>').join('');
+ $('v112euro').innerHTML=es.map((v,i)=>'<tr><td>'+['Dažnis 26','Naujausių EURO'][i]+'</td><td>'+v.p+'</td><td>'+v.e+'</td><td>'+v.two+'</td><td>'+tail(randomE,v.p)+'</td></tr>').join('');
+ let mean=a=>(a.reduce((x,y)=>x+y,0)/a.length).toFixed(2);$('v112maincontrol').textContent='Atsitiktinių MAIN portfelių prizų vidurkis: '+mean(randomM)+'; 95 % empirinis intervalas '+interval(randomM)+'. Kontrolės dalys yra aprašomosios, nes metodai parinkti jau žinant dalį istorijos.';
+ $('v112eurocontrol').textContent='Atsitiktinių EURO portfelių prizų vidurkis: '+mean(randomE)+'; 95 % empirinis intervalas '+interval(randomE)+'. Skaičiuojama su tais pačiais „Naujausių dažnio“ MAIN bilietais; nėra nepriklausomo prognozavimo pranašumo įrodymo.';
+ let h=ds,main=group(rank(h,'numbers',50,26,true),5),eu=group(rank(h,'euro',12,26,false),2);$('v112tickets').innerHTML=main.map((m,i)=>'<tr><td>'+(i+1)+'</td><td>'+m.slice().sort((a,b)=>a-b).join(', ')+'</td><td>'+eu[i].slice().sort((a,b)=>a-b).join(', ')+'</td></tr>').join('');
+ $('v112forecast').textContent='Atskiras tyrimo pasiūlymas 2026-11-06 tiražui, remiantis istorija iki 2026-11-03. Tai nėra naujas ar pakeistas LIVE užrakinimas. 2026-11-06 LIVE prognozė iš ankstesnės versijos lieka nepakeista. Kito tiražo po lapkričio 6 d. deriniai bus skaičiuojami tik papildžius oficialią istoriją.';
+ st.textContent='Baigta: '+records.length+' 2026 m. tiražai, '+(records.length*3)+' bilietai vienam metodui, 1 000 atsitiktinių kontrolinių portfelių kiekvienai atskirai patikrai. LIVE registras nekeistas.';
+ }catch(e){st.textContent='KLAIDA: '+e.message}},30)};
+})();
+</script>
+
 </body></html>
