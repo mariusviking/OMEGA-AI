@@ -1869,4 +1869,39 @@ window.omega106Check();
  }catch(e){status.textContent='KLAIDA: '+e.message}},25)};
 })();
 </script>
+
+<section class="card" id="omega109">
+<h2>OMEGA V10.9 — slenkantys langai ir finansinis auditas</h2>
+<p class="muted">Nepriklausomas V10.8 metodų perskaičiavimas: 244 istoriniai tiražai, po 3 bilietus kiekvienam metodui. 50 ir 100 tiražų langai skaičiuojami chronologiškai, kiekvienam tikrinamam tiražui naudojant tik ankstesnius rezultatus. Ankstesni LIVE užrakinimai nekeičiami.</p>
+<label for="v109cost">Vieno bilieto kaina DKK (įrašyk realią kainą)</label><input id="v109cost" type="number" min="0.01" step="0.01" value="25" />
+<p class="muted">Istorinės išmokos pagal datą ir kategoriją turi būti pateiktos atskirai. Be jų programa <b>neskaičiuos tikro ROI</b>. Įkeliamo CSV formatas: <code>date,category,payout</code>, pvz. <code>2026-11-03,2+1,75.00</code>. Reikia visų laimėtų kategorijų kiekvieną atitinkamą dieną; 0 išmokos nepriskiriamos automatiškai. DKK, dešimtainis skirtukas – taškas.</p>
+<label for="v109csv">Istorinių išmokų CSV (pasirinktinai)</label><input id="v109csv" type="file" accept=".csv,text/csv" />
+<button type="button" onclick="omega109Run()">Paleisti V10.9 analizę</button>
+<button type="button" onclick="omega109Export()">Eksportuoti rezultatų CSV</button>
+<div class="notice" id="v109status">Dar nepaleista. Įrašai iš LIVE registro tik skaitomi.</div>
+<h3>Finansinė suvestinė</h3><div class="scroll"><table><thead><tr><th>Metodas</th><th>Bilietai</th><th>Išlaidos (DKK)</th><th>Išmokos (DKK)</th><th>ROI</th><th>Prizinių</th></tr></thead><tbody id="v109money"></tbody></table></div>
+<h3>Slenkantys 50 ir 100 tiražų laikotarpiai</h3><div class="scroll"><table><thead><tr><th>Langas</th><th>Iki datos</th><th>Dažnis 26: prizai</th><th>Dažnis 104: prizai</th><th>Random vidurkis [95 %]</th></tr></thead><tbody id="v109rolling"></tbody></table></div>
+<p class="muted">Rodomi paskutiniai 12 langų kiekvienam ilgiui. Atsitiktinės kontrolės 1 000 portfelių turi tą pačią 3 bilietų / 15 MAIN / 6 EURO struktūrą. Kontroliniai skaičiai generuojami atkuriamai; istoriniai rezultatai nėra nepriklausomas algoritmų patvirtinimas. Jei trūksta bent vienos reikalingos išmokos, tikras ROI nerodomas.</p>
+</section>
+<script>
+(function(){'use strict';
+const $=id=>document.getElementById(id),START='2024-07-05',N=1000;
+let latest=null;
+function random(seed){let x=seed>>>0;return()=>{x^=x<<13;x^=x>>>17;x^=x<<5;return (x>>>0)/4294967296}}
+function shuffle(n,r){let a=Array.from({length:n},(_,i)=>i+1);for(let i=n-1;i>0;i--){let j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function tickets(h,w){function rank(field,max,win){let c=Array(max+1).fill(0);for(let d of h.slice(-win))for(let x of d[field])c[x]++;return Array.from({length:max},(_,i)=>i+1).sort((a,b)=>c[b]-c[a]||a-b)}let m=rank('numbers',50,w),e=rank('euro',12,52);return [0,1,2].map(k=>({m:m.slice(5*k,5*k+5),e:e.slice(2*k,2*k+2)}))}
+function hit(t,d){let m=t.m.filter(x=>d.numbers.includes(x)).length,e=t.e.filter(x=>d.euro.includes(x)).length;return{cat:m+'+'+e,prize:m>=3||(m===2&&e>=1)||(m===1&&e===2)}}
+function quant(a,p){let s=a.slice().sort((x,y)=>x-y);return s[Math.floor((s.length-1)*p)]}
+function parseCSV(s){let m=new Map(),rows=s.replace(/^\uFEFF/,'').trim().split(/\r?\n/);for(let i=0;i<rows.length;i++){let line=rows[i].trim();if(!line)continue;let a=line.split(',').map(x=>x.trim().replace(/^"|"$/g,''));if(i===0&&a[0].toLowerCase()==='date')continue;if(a.length!==3||!/^\d{4}-\d\d-\d\d$/.test(a[0])||!/^([1-5])\+[0-2]$/.test(a[1])||!/^\d+(\.\d+)?$/.test(a[2]))throw Error('Netinkama CSV eilutė '+(i+1));let k=a[0]+'|'+a[1];if(m.has(k))throw Error('Dubliuota išmoka '+k);m.set(k,Number(a[2]))}return m}
+function esc(x){return String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+window.omega109Run=async function(){let st=$('v109status');st.textContent='Ruošiami chronologiniai rezultatai…';try{if(typeof window.OMEGA_V108_HISTORY!=='function')throw Error('Nėra bendros istorijos šaltinio');let ds=window.OMEGA_V108_HISTORY(),start=ds.findIndex(d=>d.date>=START);if(start<104)throw Error('Nepakanka istorijos');let cost=Number($('v109cost').value);if(!Number.isFinite(cost)||cost<=0)throw Error('Įvesk teisingą bilieto kainą');let payouts=new Map(),file=$('v109csv').files[0];if(file){if(file.size>2e6)throw Error('CSV per didelis');payouts=parseCSV(await file.text())}
+let targets=ds.slice(start),methods=[[],[]],prizes=[0,0],earn=[0,0],missing=[0,0];for(let i=start;i<ds.length;i++){let d=ds[i];for(let j=0;j<2;j++){let ts=tickets(ds.slice(0,i),j===0?26:104),hits=ts.map(t=>hit(t,d)),p=hits.filter(h=>h.prize).length;methods[j].push(p);prizes[j]+=p;for(let h of hits)if(h.prize){let k=d.date+'|'+h.cat;if(payouts.has(k))earn[j]+=payouts.get(k);else missing[j]++}}}
+let randomSeries=Array.from({length:N},()=>[]);for(let sim=0;sim<N;sim++){let r=random((0x9e3779b9^(sim+1)*2654435761)>>>0);for(let i=0;i<targets.length;i++){let m=shuffle(50,r),e=shuffle(12,r),p=0;for(let k=0;k<3;k++)p+=+hit({m:m.slice(5*k,5*k+5),e:e.slice(2*k,2*k+2)},targets[i]).prize;randomSeries[sim].push(p)}}
+let expense=targets.length*3*cost;let rows=[];for(let j=0;j<2;j++){let complete=missing[j]===0,roi=complete?((earn[j]-expense)/expense*100).toFixed(2)+' %':'Neskaičiuojamas';rows.push('<tr><td>'+['Dažnis 26','Dažnis 104'][j]+'</td><td>'+(targets.length*3)+'</td><td>'+expense.toFixed(2)+'</td><td>'+(complete?earn[j].toFixed(2):'Trūksta '+missing[j]+' išmokų')+'</td><td>'+roi+'</td><td>'+prizes[j]+'</td></tr>')}$('v109money').innerHTML=rows.join('');
+let rolling=[];for(let win of [50,100])for(let i=win-1;i<targets.length;i++){let p26=methods[0].slice(i-win+1,i+1).reduce((a,b)=>a+b,0),p104=methods[1].slice(i-win+1,i+1).reduce((a,b)=>a+b,0),control=randomSeries.map(a=>a.slice(i-win+1,i+1).reduce((x,y)=>x+y,0));rolling.push({win,date:targets[i].date,p26,p104,mean:control.reduce((a,b)=>a+b,0)/N,lo:quant(control,.025),hi:quant(control,.975)})}
+latest={rolling,methods,targets,prizes,expense,earn,missing,cost};$('v109rolling').innerHTML=[50,100].flatMap(w=>rolling.filter(x=>x.win===w).slice(-12)).map(x=>'<tr><td>'+x.win+'</td><td>'+esc(x.date)+'</td><td>'+x.p26+'</td><td>'+x.p104+'</td><td>'+x.mean.toFixed(2)+' ['+x.lo+'; '+x.hi+']</td></tr>').join('');st.textContent='Baigta. '+targets.length+' tiražai ('+targets[0].date+' – '+targets.at(-1).date+'), 1 000 atsitiktinių kontrolinių portfelių. '+(missing[0]+missing[1]?'Tikras ROI nerodomas: trūksta istorinių išmokų (26: '+missing[0]+', 104: '+missing[1]+').':'Visos laimėtos kategorijos turi CSV išmokas; ROI apskaičiuotas pagal įvestą bilieto kainą ir CSV, bet jų autentiškumas nepatikrintas.');}catch(e){st.textContent='KLAIDA: '+e.message}}
+window.omega109Export=function(){if(!latest){$('v109status').textContent='Pirma paleisk analizę.';return}let rows=['window,through_date,frequency26_prizes,frequency104_prizes,random_mean,random_95_lower,random_95_upper',...latest.rolling.map(x=>[x.win,x.date,x.p26,x.p104,x.mean.toFixed(3),x.lo,x.hi].join(','))],b=new Blob([rows.join('\n')],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='OMEGA_V10_9_slenkantys_langai.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
+})();
+</script>
+
 </body></html>
