@@ -1,4 +1,4 @@
-<!doctype html><html lang="lt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMEGA V10.7 — pilna LIVE istorija</title><style>
+<!doctype html><html lang="lt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMEGA V10.8 — chronologinis 26 / 104 tyrimas</title><style>
 :root{--bg:#06111f;--card:#10233d;--card2:#091827;--line:#294766;--text:#eef5ff;--muted:#9fb2cf;--green:#68e2b6;--yellow:#ffd45d;--red:#ff5b61;--blue:#79b8ff}
 *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#071524,#030b14);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .wrap{max-width:1180px;margin:auto;padding:18px}.hero,.card{background:linear-gradient(180deg,#122642,#0d2037);border:1px solid var(--line);border-radius:22px;padding:22px;margin:14px 0;box-shadow:0 12px 35px #0004}
@@ -1726,6 +1726,7 @@ function ds(){
  if(missing.length)throw Error('Trūksta '+missing.length+' tiražų iki '+last+': '+missing.join(', '));
  return [...records.values()].sort((a,b)=>a.date.localeCompare(b.date));
 }
+window.OMEGA_V108_HISTORY=ds;
 function ticket(hist,w){let ranked=(field,max,win)=>{let c=Array(max+1).fill(0);for(let d of hist.slice(-win))for(let n of d[field])c[n]++;return Array.from({length:max},(_,i)=>i+1).sort((a,b)=>c[b]-c[a]||a-b)};let m=ranked('numbers',50,w),e=ranked('euro',12,52);return [0,1,2].map(k=>({m:m.slice(k*5,k*5+5).sort((a,b)=>a-b),e:e.slice(k*2,k*2+2).sort((a,b)=>a-b)}))}
 function hits(t,d){let m=t.m.filter(x=>d.numbers.includes(x)).length,e=t.e.filter(x=>d.euro.includes(x)).length;return {m,e,prize:(m>=3||(m===2&&e>=1)||(m===1&&e===2))?1:0}}
 function show(){
@@ -1821,4 +1822,51 @@ window.omega106Check=function(){
 };
 window.omega106Check();
 })();</script>
+
+<section class="card" id="omega108">
+<h2>OMEGA V10.8 — chronologinis 26 / 104 palyginimas</h2>
+<p class="muted">Vienas bendras V10.7.1 istorijos šaltinis (2022-03-25 – 2026-11-03). Kiekvienam tikrinamam tiražui naudojami <b>tik ankstesni</b> rezultatai. Abu metodai sudaro po 3 bilietus: 15 nesikartojančių MAIN skaičių ir 6 EURO skaičius. Kaip LIVE eksperimente, MAIN reitinguojami pagal 26 arba 104 tiražus, o EURO – pagal paskutinius 52 tiražus.</p>
+<button type="button" onclick="omega108Run()">Paleisti išsamų V10.8 palyginimą</button>
+<div id="omega108status" class="notice">Tyrimas dar nepaleistas. Ankstesni LIVE užrakinimai neliečiami.</div>
+<div class="scroll"><table><thead><tr><th>Metodas</th><th>Bilietų</th><th>Prizinių</th><th>≥3 MAIN</th><th>MAIN / bil.</th><th>EURO / bil.</th><th>Kontrolės uodegos dalis</th></tr></thead><tbody id="omega108summary"></tbody></table></div>
+<h3>Pagal metus</h3><div class="scroll"><table><thead><tr><th>Metai</th><th>Tiražai</th><th>26: prizai</th><th>104: prizai</th><th>Random: vidurkis [95 %]</th></tr></thead><tbody id="omega108years"></tbody></table></div>
+<h3>Prizinės kategorijos</h3><div class="scroll"><table><thead><tr><th>MAIN + EURO</th><th>Dažnis 26</th><th>Dažnis 104</th><th>Random: vidurkis [95 %]</th></tr></thead><tbody id="omega108cats"></tbody></table></div>
+<div id="omega108verdict" class="notice">Atsitiktinė kontrolė yra modelio diagnostika, ne garantija ir ne nepriklausomas statistinis patvirtinimas. Tik iš anksto užrakinti būsimi tiražai suteikia naują, nuo kūrimo istorijos atskirą įvertinimą.</div>
+<p class="muted">Atsitiktinė kontrolė: 1 000 atkuriamų portfelių su tokia pačia 3 bilietų ir nesikartojančių skaičių struktūra. Kontrolė neseka dažnio reitingavimo taisyklių. Rezultatai nereiškia realaus pelningumo: istorinių išmokų nėra, ROI neskaičiuojamas. LIVE registro duomenys tik skaitomi; joks užrakinimas neperrašomas.</p>
+</section>
+<script>
+(function(){'use strict';
+ const $=id=>document.getElementById(id), SIMS=1000, START='2024-07-05';
+ const cats=['5+2','5+1','5+0','4+2','4+1','4+0','3+2','3+1','3+0','2+2','2+1','1+2'];
+ function rng(seed){let x=seed>>>0;return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return (x>>>0)/4294967296}}
+ function shuffle(n,r){let a=Array.from({length:n},(_,i)=>i+1);for(let i=n-1;i>0;i--){let j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+ function portfolio(r){let m=shuffle(50,r),e=shuffle(12,r);return [0,1,2].map(k=>({m:m.slice(5*k,5*k+5),e:e.slice(2*k,2*k+2)}))}
+ function model(hist,w){let rank=(key,n,win)=>{let a=Array(n+1).fill(0);for(const d of hist.slice(-win))for(const v of d[key])a[v]++;return Array.from({length:n},(_,i)=>i+1).sort((x,y)=>a[y]-a[x]||x-y)};let m=rank('numbers',50,w),e=rank('euro',12,52);return [0,1,2].map(k=>({m:m.slice(k*5,k*5+5),e:e.slice(k*2,k*2+2)}))}
+ function match(t,d){let m=t.m.filter(x=>d.numbers.includes(x)).length,e=t.e.filter(x=>d.euro.includes(x)).length;return {m,e,cat:m+'+'+e,prize:m>=3||(m===2&&e>=1)||(m===1&&e===2)}}
+ function blank(){return {n:0,p:0,m:0,e:0,three:0,c:{},y:{}}}
+ function add(o,d,t){let h=match(t,d),year=d.date.slice(0,4);o.n++;o.p+=+h.prize;o.m+=h.m;o.e+=h.e;o.three+=+(h.m>=3);if(h.prize)o.c[h.cat]=(o.c[h.cat]||0)+1;if(!o.y[year])o.y[year]={n:0,p:0};o.y[year].n++;o.y[year].p+=+h.prize}
+ function quant(a,p){let x=a.slice().sort((a,b)=>a-b);return x[Math.floor((x.length-1)*p)]}
+ function fmt(x){return Number(x).toFixed(3)}
+ window.omega108Run=function(){const status=$('omega108status');status.textContent='Skaičiuojama 1 000 atsitiktinių kontrolinių portfelių…';setTimeout(()=>{try{
+  if(typeof window.OMEGA_V108_HISTORY!=='function')throw Error('Bendras istorijos šaltinis nepasiekiamas');
+  let ds=window.OMEGA_V108_HISTORY(),start=ds.findIndex(d=>d.date>=START);if(start<104)throw Error('Nepakanka istorijos');
+  if(ds.length!==482||ds[0].date!=='2022-03-25'||ds.at(-1).date!=='2026-11-03')throw Error('Netikėtas istorijos dydis arba datos. Paleisk V10.7 diagnostiką.');
+  let a=blank(),b=blank(),targets=[];
+  for(let i=start;i<ds.length;i++){let d=ds[i],h=ds.slice(0,i),ta=model(h,26),tb=model(h,104);for(let t of ta)add(a,d,t);for(let t of tb)add(b,d,t);targets.push(d)}
+  let control=[],years={},categories={};for(let k=0;k<SIMS;k++){
+   let o=blank(),r=rng((0x9e3779b9 ^ Math.imul(k+1,2654435761))>>>0);
+   for(let d of targets)for(let t of portfolio(r))add(o,d,t);
+   control.push(o.p);for(let [y,v] of Object.entries(o.y))(years[y]??=[]).push(v.p);
+   for(let cat of cats)(categories[cat]??=[]).push(o.c[cat]||0);
+  }
+  let avg=x=>x.reduce((z,v)=>z+v,0)/x.length,interval=x=>fmt(avg(x))+' ['+quant(x,.025)+'; '+quant(x,.975)+']';
+  let tail=v=>(control.filter(x=>x>=v).length+1)/(SIMS+1);
+  $('omega108summary').innerHTML=[['Dažnis 26',a],['Dažnis 104',b]].map(([name,o])=>'<tr><td>'+name+'</td><td>'+o.n+'</td><td>'+o.p+'</td><td>'+o.three+'</td><td>'+fmt(o.m/o.n)+'</td><td>'+fmt(o.e/o.n)+'</td><td>'+fmt(tail(o.p))+'</td></tr>').join('')+'<tr><td>Random (1 000)</td><td>'+(targets.length*3)+'</td><td>'+interval(control)+'</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>';
+  $('omega108years').innerHTML=Object.keys(years).sort().map(y=>'<tr><td>'+y+'</td><td>'+targets.filter(d=>d.date.startsWith(y)).length+'</td><td>'+(a.y[y]?.p||0)+'</td><td>'+(b.y[y]?.p||0)+'</td><td>'+interval(years[y])+'</td></tr>').join('');
+  $('omega108cats').innerHTML=cats.map(c=>'<tr><td>'+c+'</td><td>'+(a.c[c]||0)+'</td><td>'+(b.c[c]||0)+'</td><td>'+interval(categories[c])+'</td></tr>').join('');
+  status.textContent='Baigta. '+targets.length+' chronologiškai testuotų tiražų ('+targets[0].date+' – '+targets.at(-1).date+'), '+(targets.length*3)+' bilietų kiekvienam metodui. Bendra istorija: '+ds.length+' tiražai. Prizų skaičiavimas ir 1 000 kontrolinių portfelių atlikti tik naršyklėje.';
+  $('omega108verdict').textContent='Dažnis 26: '+a.p+' priziniai bilietai; Dažnis 104: '+b.p+'; atsitiktinės kontrolės vidurkis '+fmt(avg(control))+' ir 95 % intervalas ['+quant(control,.025)+'; '+quant(control,.975)+']. Kontrolinių portfelių su bent tiek prizų dalis: 26 = '+fmt(tail(a.p))+', 104 = '+fmt(tail(b.p))+'. Tai žvalgomasis istorinis palyginimas: metodai buvo kuriami žinant istoriją, todėl šių dalių negalima laikyti patvirtintomis p reikšmėmis ar įrodytu pranašumu. Tik būsimi iš anksto užrakinti tiražai bus nepriklausomas tęstinis testas.';
+ }catch(e){status.textContent='KLAIDA: '+e.message}},25)};
+})();
+</script>
 </body></html>
