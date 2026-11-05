@@ -1904,4 +1904,53 @@ window.omega109Export=function(){if(!latest){$('v109status').textContent='Pirma 
 })();
 </script>
 
+
+<section class="card" id="omega110">
+<h2>OMEGA V11.0 — prognozavimo metodų laboratorija</h2>
+<p class="muted">Tikslas: tikrinti skaičių parinkimo metodus, ne finansus. Chronologinė analizė be ateities duomenų. Atsitiktiniuose nepriklausomuose tiražuose kiekvienas galiojantis derinys turi vienodą teorinę tikimybę; istorinis dažnis negarantuoja pranašumo.</p>
+<button type="button" onclick="omega110Run()">Palyginti metodus ir parodyti derinius</button>
+<div class="notice" id="v110status">Dar nepaleista. LIVE užrakinimai nekeičiami.</div>
+<h3>Metodų testas: atskiras 2026 m. vertinimo laikotarpis</h3>
+<p class="muted">Palyginami iš anksto apibrėžti metodai: Dažnis 26, Dažnis 52, Dažnis 104, Naujausių dažnis (26, didesnis svoris naujesniems), Porų bendras dažnis (104) ir vienodas atsitiktinis kontrolinis modelis. Visi metodai generuoja 3 bilietus su 15 nesikartojančių MAIN ir 6 EURO skaičiais. Vertinami tik 2026-01-02 – 2026-11-03 tiražai; kiekvieno tiražo prognozė skaičiuojama iš ankstesnės istorijos.</p>
+<div class="scroll"><table><thead><tr><th>Metodas</th><th>Priziniai / bilietai</th><th>≥3 MAIN</th><th>MAIN vid./bil.</th><th>EURO vid./bil.</th></tr></thead><tbody id="v110methods"></tbody></table></div>
+<h3>Kontrolė ir palyginimo ribos</h3>
+<div class="notice" id="v110control">Laukiama bandymo.</div>
+<h3>Siūlomi deriniai kitam tiražui</h3>
+<div class="notice" id="v110forecast">Rekomendacijos dar nesugeneruotos. Tai nėra užrakintas LIVE bilietas.</div>
+<div class="scroll"><table><thead><tr><th>Metodas</th><th>Bilietas</th><th>5 MAIN</th><th>2 EURO</th></tr></thead><tbody id="v110tickets"></tbody></table></div>
+<p class="muted">Svarbu: 2026-11-06 LIVE prognozė jau užrakinta ankstesnėje versijoje ir <b>neliečiama</b>. Ši laboratorija rodo tik atskirą tyrimo variantą, jo neužrakina ir neperrašo. Naujam tiražui po 2026-11-06 pirmiausia būtina papildyti istoriją oficialiu 2026-11-06 rezultatu. Metodų atranka pagal šį istorinį testą yra žvalgomoji; tik vėliau užrakintos prognozės gali būti naujas nepriklausomas testas.</p>
+</section>
+<script>
+(function(){'use strict';
+const $=id=>document.getElementById(id), START='2026-01-02';
+const defs=[['Dažnis 26','f26'],['Dažnis 52','f52'],['Dažnis 104','f104'],['Naujausių dažnis','recent'],['Porų dažnis','pairs']];
+function ranked(hist,field,max,win,mode){
+ const h=hist.slice(-win),count=Array(max+1).fill(0),pair=Array(max+1).fill(0);
+ for(let i=0;i<h.length;i++){
+  let a=h[i][field],weight=mode==='recent'? (i+1)/h.length:1;
+  for(let n of a)count[n]+=weight;
+  if(mode==='pairs')for(let n of a)for(let m of a)if(n!==m)pair[n]++;
+ }
+ return Array.from({length:max},(_,i)=>i+1).sort((a,b)=>(count[b]+(mode==='pairs'?pair[b]*0.025:0))-(count[a]+(mode==='pairs'?pair[a]*0.025:0))||a-b);
+}
+function tickets(hist,id){let w=id==='f26'||id==='recent'?26:id==='f52'?52:104,mode=id==='recent'?'recent':id==='pairs'?'pairs':'frequency',main=ranked(hist,'numbers',50,w,mode),eu=ranked(hist,'euro',12,52,mode);return [0,1,2].map(i=>({m:main.slice(i*5,i*5+5).sort((a,b)=>a-b),e:eu.slice(i*2,i*2+2).sort((a,b)=>a-b)}))}
+function score(t,d){let m=t.m.filter(x=>d.numbers.includes(x)).length,e=t.e.filter(x=>d.euro.includes(x)).length;return {m,e,p:m>=3||(m===2&&e>=1)||(m===1&&e===2)}}
+function rng(seed){let x=seed>>>0;return()=>{x^=x<<13;x^=x>>>17;x^=x<<5;return(x>>>0)/4294967296}}
+function shuffle(n,r){let a=Array.from({length:n},(_,i)=>i+1);for(let i=n-1;i>0;i--){let j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function randomTickets(r){let m=shuffle(50,r),e=shuffle(12,r);return [0,1,2].map(i=>({m:m.slice(5*i,5*i+5),e:e.slice(2*i,2*i+2)}))}
+function valid(ds){if(!Array.isArray(ds)||ds.length<400)throw Error('Istorija per trumpa');let last='';for(let d of ds){if(!d||typeof d.date!=='string'||d.date<=last||!Array.isArray(d.numbers)||d.numbers.length!==5||new Set(d.numbers).size!==5||d.numbers.some(n=>!Number.isInteger(n)||n<1||n>50)||!Array.isArray(d.euro)||d.euro.length!==2||new Set(d.euro).size!==2||d.euro.some(n=>!Number.isInteger(n)||n<1||n>12))throw Error('Netinkamas istorinis įrašas: '+(d&&d.date));last=d.date}if(ds.at(-1).date!=='2026-11-03')throw Error('Paskutinė istorijos data nėra 2026-11-03')}
+window.omega110Run=function(){let st=$('v110status');st.textContent='Skaičiuojama…';setTimeout(()=>{try{
+ if(typeof window.OMEGA_V108_HISTORY!=='function')throw Error('Bendros istorijos funkcija nepasiekiama');let ds=window.OMEGA_V108_HISTORY();valid(ds);let start=ds.findIndex(d=>d.date>=START);if(start<104)throw Error('Nepakanka ankstesnės istorijos');let totals=defs.map(()=>({p:0,m:0,e:0,three:0,n:0})),actual=ds.slice(start);
+ for(let i=start;i<ds.length;i++)for(let k=0;k<defs.length;k++)for(let t of tickets(ds.slice(0,i),defs[k][1])){let s=score(t,ds[i]),o=totals[k];o.n++;o.p+=+s.p;o.m+=s.m;o.e+=s.e;o.three+=+(s.m>=3)}
+ $('v110methods').innerHTML=defs.map((x,k)=>{let o=totals[k];return '<tr><td>'+x[0]+'</td><td>'+o.p+' / '+o.n+'</td><td>'+o.three+'</td><td>'+(o.m/o.n).toFixed(3)+'</td><td>'+(o.e/o.n).toFixed(3)+'</td></tr>'}).join('');
+ let controls=[];for(let sim=0;sim<1000;sim++){let r=rng((0x9e3779b9^Math.imul(sim+1,2654435761))>>>0),p=0;for(let d of actual)for(let t of randomTickets(r))p+=+score(t,d).p;controls.push(p)}controls.sort((a,b)=>a-b);let avg=controls.reduce((a,b)=>a+b,0)/controls.length,lo=controls[24],hi=controls[974];
+ let best=totals.reduce((b,o,i)=>o.p>totals[b].p?i:b,0),winner=defs[best],tail=controls.filter(v=>v>=totals[best].p).length/controls.length;
+ $('v110control').textContent='Atsitiktinė kontrolė (1 000 portfelių): vidutiniškai '+avg.toFixed(2)+' prizinio bilieto; 95 % empirinis intervalas ['+lo+'; '+hi+']. Daugiausia istorinių prizų šiame vertinime: '+winner[0]+' ('+totals[best].p+'). Kontrolinių portfelių su bent tiek prizų dalis: '+(tail*100).toFixed(1)+' %. Kadangi geriausias iš 5 metodų pasirinktas pagal tuos pačius duomenis, ši dalis nėra koreguota už metodų atranką ir neįrodo prognozavimo pranašumo.';
+ let picks=[winner,defs[best===0?2:0]],rows=[];for(let item of picks){let ts=tickets(ds,item[1]);ts.forEach((t,i)=>rows.push('<tr><td>'+item[0]+'</td><td>'+(i+1)+'</td><td>'+t.m.join(', ')+'</td><td>'+t.e.join(', ')+'</td></tr>'))}$('v110tickets').innerHTML=rows.join('');
+ $('v110forecast').textContent='Atskiras tyrimo pasiūlymas 2026-11-06 tiražui, naudojant istoriją iki 2026-11-03. Pirmieji 3 bilietai: '+winner[0]+'; kiti 3 – alternatyvus metodas. Tai NE užrakinta LIVE prognozė. Anksčiau užrakinti 2026-11-06 bilietai lieka nepakeisti. Šie skaičiai neturi didesnės įrodytos teorinės iškritimo tikimybės.';
+ st.textContent='Baigta: '+actual.length+' tiražai ('+actual[0].date+' – '+actual.at(-1).date+'), '+(actual.length*3)+' bilietų kiekvienam metodui; 1 000 atsitiktinių kontrolinių portfelių. LIVE registras tik skaitomas.';
+ }catch(e){st.textContent='KLAIDA: '+e.message}},30)};
+})();
+</script>
+
 </body></html>
