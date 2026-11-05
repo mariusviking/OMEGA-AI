@@ -1699,6 +1699,8 @@ function validDate(s){if(!/^\d{4}-\d\d-\d\d$/.test(s))return false;let d=new Dat
 function isDraw(s){return [2,5].includes(new Date(s+'T12:00:00Z').getUTCDay())}
 function parse(s,n,max){let a=(s||'').trim().split(/[\s,;·]+/).map(Number);if(a.length!==n||new Set(a).size!==n||a.some(x=>!Number.isInteger(x)||x<1||x>max))throw Error('Reikia '+n+' skirtingų skaičių nuo 1 iki '+max);return a.sort((x,y)=>x-y)}
 const OMEGA107_VERIFIED=[{"date":"2026-10-06","numbers":[7,12,19,28,50],"euro":[1,6]},{"date":"2026-10-09","numbers":[18,38,41,43,46],"euro":[7,10]},{"date":"2026-10-13","numbers":[11,17,20,22,35],"euro":[4,8]},{"date":"2026-10-16","numbers":[12,24,25,29,45],"euro":[1,9]},{"date":"2026-10-20","numbers":[5,16,32,34,38],"euro":[8,9]},{"date":"2026-10-23","numbers":[15,20,23,29,30],"euro":[5,12]},{"date":"2026-10-27","numbers":[11,33,38,42,47],"euro":[11,12]},{"date":"2026-10-30","numbers":[21,26,37,39,42],"euro":[5,7]},{"date":"2026-11-03","numbers":[2,5,12,32,43],"euro":[1,3]}];
+// Expose a read-only snapshot to the separate diagnostics script.
+window.OMEGA107_VERIFIED=Object.freeze(OMEGA107_VERIFIED.map(d=>Object.freeze({date:d.date,numbers:Object.freeze([...d.numbers]),euro:Object.freeze([...d.euro])})));
 function ds(){
  // V10.7: one chronological source for LIVE and walk-forward. Never edit existing locks.
  const records=new Map(), errors=[];
@@ -1773,7 +1775,7 @@ show();auditRegistry();
 </script>
 
 
-<section class="card" id="omega106"><h2>OMEGA V10.7 — pilna LIVE istorija ir auditas</h2>
+<section class="card" id="omega106"><h2>OMEGA V10.7.1 — pilna LIVE istorija ir auditas (diagnostikos pataisa)</h2>
 <p class="muted">Vienodas režimas nuo <b>2022-03-25</b>: 5 iš 50, EURO 2 iš 12, antradieniais ir penktadieniais. Naujausias įtrauktas patikrintas tiražas: <b>2026-11-03</b>. Nauji oficialūs rezultatai po šios datos neatsinaujina automatiškai: reikalingas naujas programos atnaujinimas. Ankstesni užrakinti bilietai niekada neperskaičiuojami.</p>
 <button type="button" onclick="omega106Check()">Patikrinti bendrą istoriją</button>
 <div id="omega106status" class="notice">Dar nepatikrinta.</div>
@@ -1799,7 +1801,7 @@ window.omega106Check=function(){
    map.set(d.date,{date:d.date,numbers:n,euro:e});sources.set(d.date,source);
   }
   for(const d of (typeof BASE!=='undefined'&&Array.isArray(BASE)?BASE:[]))if(d&&d.date>='2022-03-25'&&d.date<='2026-11-03')add(d,'BASE (nepatikrinta atskirai)');
-  for(const d of OMEGA107_VERIFIED)add(d,'oficialus archyvas');
+  for(const d of window.OMEGA107_VERIFIED)add(d,'oficialus archyvas');
   let liveFacts=0;
   for(const r of reg){
    if(!r||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(r.date||'')){issues.push('Netinkama LIVE data');continue}
@@ -1810,7 +1812,7 @@ window.omega106Check=function(){
   for(let t=new Date('2022-03-25T12:00:00Z');t<=new Date(cutoff+'T12:00:00Z');t.setUTCDate(t.getUTCDate()+1)){
    if(t.getUTCDay()===2||t.getUTCDay()===5){let d=t.toISOString().slice(0,10);if(!map.has(d))missing.push(d)}
   }
-  const dates=[...map.keys()].sort(),archiveDates=OMEGA107_VERIFIED.map(x=>x.date);
+  const dates=[...map.keys()].sort(),archiveDates=window.OMEGA107_VERIFIED.map(x=>x.date);
   const status=issues.length||missing.length?'DĖMESIO – patikra nepraėjo. ':'Patikra sėkminga. ';
   el.textContent=status+'Analizės pradžia: 2022-03-25. Pirmasis: '+(dates[0]||'—')+'. Paskutinis: '+(dates.at(-1)||'—')+'. Unikalių tiražų: '+map.size+'. Tikėtina iki '+cutoff+': 482. Trūkstamų datų: '+missing.length+(missing.length?' ('+missing.join(', ')+')':'')+'. Naujai sutikrintų su archyvu datų: '+archiveDates.length+'. LIVE įvestų faktų: '+liveFacts+'. '+(issues.length?'Konfliktai: '+issues.join('; ')+'. ':'')+'Užrakintos prognozės nekeičiamos. Įprasta prognozė naudoja istoriją iki ankstesnio tiražo, o ateities datai po 2026-11-03 būtinas atnaujintas archyvas.';
   body.innerHTML=reg.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(r=>'<tr><td>'+r.date+'</td><td>Užrakinta</td><td>'+r.dataThrough+'</td><td>'+(r.actual?'Įrašytas':'Laukiama')+'</td></tr>').join('')||'<tr><td colspan="4">LIVE registras tuščias</td></tr>';
