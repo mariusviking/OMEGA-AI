@@ -2050,4 +2050,42 @@ window.omega112Run=function(){let st=$('v112status');st.textContent='Skaičiuoja
 })();
 </script>
 
+
+<section class="card" id="omega113">
+<h2>OMEGA V11.3 — metodų skirtumų auditas ir būsimas LIVE protokolas</h2>
+<p class="muted">Patikra naudoja tik ankstesnių tiražų duomenis. Ši versija nekeičia užrakintų prognozių, localStorage ir oficialios istorijos.</p>
+<button type="button" onclick="omega113Run()">Paleisti V11.3 auditą</button>
+<div class="notice" id="v113status">Auditas dar nepaleistas.</div>
+<h3>„Dažnis 52“ prieš „Naujausių dažnį“</h3>
+<div class="scroll"><table><thead><tr><th>Rodiklis</th><th>Rezultatas</th></tr></thead><tbody id="v113audit"></tbody></table></div>
+<div class="notice" id="v113verdict">Bus patikrinta, ar sutampa patys bilietai, ne tik prizų sumos.</div>
+<h3>Nepriklausomo LIVE bandymo taisyklės</h3>
+<p><strong>Pradžia:</strong> 2026-11-10 tiražas, bet tik patvirtinus oficialų 2026-11-06 rezultatą ir įtraukus jį į istoriją. Jei istorija neatnaujinta, nauja prognozė negeneruojama.</p>
+<p><strong>Pagrindinis metodas:</strong> 3 bilietai; MAIN — „Naujausių dažnis“ (26 tiražai, linijinis svoris naujesniems); EURO — „Dažnis 26“ (26 tiražai). Tai iš anksto fiksuojama būsimiems bandymams, tačiau parinkta žinant ankstesnę istoriją.</p>
+<p><strong>Kontrolė:</strong> 3 atsitiktiniai bilietai kiekvienam tiražui, su 15 nesikartojančių MAIN ir 6 nesikartojančiais EURO skaičiais; generavimo taisyklė ir sėkla turi būti užfiksuotos prieš tiražą.</p>
+<p><strong>Vertinimas:</strong> MAIN ir EURO pataikymų suma, bilietai su ≥3 MAIN ir prizinių bilietų skaičius. Vertinti po 25, 50 ir 100 naujų tiražų; nekeisti metodo pagal tarpinius rezultatus. Lyginti ir su teorine atsitiktinio parinkimo tikimybe.</p>
+<div class="notice">Svarbu: V11.3 tik aprašo protokolą ir atlieka istorinį auditą. Ji <strong>nesukuria automatinio LIVE užrakinimo</strong> ir nesaugo kontrolinių bilietų. Prieš lapkričio 10 d. būtina atskirai įgyvendinti bei patikrinti išankstinį abiejų portfelių užrakinimą.</div>
+</section>
+<script>
+(function(){'use strict';
+const el=id=>document.getElementById(id);
+function rank(h,field,max,w,recent){let a=h.slice(-w),c=Array(max+1).fill(0);for(let i=0;i<a.length;i++){let wt=recent?(i+1)/a.length:1;for(let n of a[i][field])c[n]+=wt}return Array.from({length:max},(_,i)=>i+1).sort((x,y)=>c[y]-c[x]||x-y)}
+function group(a,n){return [0,1,2].map(i=>a.slice(i*n,(i+1)*n))}
+window.omega113Run=function(){let st=el('v113status');try{
+if(typeof window.OMEGA_V108_HISTORY!=='function')throw Error('Bendros istorijos funkcija nerasta');
+let ds=window.OMEGA_V108_HISTORY();if(!Array.isArray(ds)||ds.length<400||ds.at(-1).date!=='2026-11-03')throw Error('Istorija nepatvirtinta iki 2026-11-03');
+let start=ds.findIndex(d=>d.date>='2024-01-02');if(start<104)throw Error('Per mažai istorijos');
+let all=0,identical=0,sameMain=0,sameEuro=0,overlapM=0,overlapE=0,examples=[];
+for(let i=start;i<ds.length;i++){let h=ds.slice(0,i),a=group(rank(h,'numbers',50,52,false),5),b=group(rank(h,'numbers',50,26,true),5),ea=group(rank(h,'euro',12,52,false),2),eb=group(rank(h,'euro',12,26,true),2);all++;
+let am=JSON.stringify(a)===JSON.stringify(b),ae=JSON.stringify(ea)===JSON.stringify(eb);sameMain+=+am;sameEuro+=+ae;identical+=+(am&&ae);
+for(let j=0;j<3;j++){overlapM+=a[j].filter(x=>b[j].includes(x)).length;overlapE+=ea[j].filter(x=>eb[j].includes(x)).length}
+if(!am&&examples.length<3)examples.push(ds[i].date+': 52='+a[0].join(',')+'; naujausių='+b[0].join(','));}
+let rows=[['Patikrintų chronologinių tiražų',all],['Identiški MAIN portfeliai',sameMain+' / '+all],['Identiški EURO portfeliai',sameEuro+' / '+all],['Identiški MAIN ir EURO kartu',identical+' / '+all],['MAIN sutapimas toje pačioje bilieto vietoje',(overlapM/(all*3)).toFixed(2)+' iš 5'],['EURO sutapimas toje pačioje bilieto vietoje',(overlapE/(all*3)).toFixed(2)+' iš 2']];
+el('v113audit').innerHTML=rows.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>').join('');
+el('v113verdict').textContent=(sameMain===all?'MAIN metodai visais tirtais atvejais sugeneravo identiškus portfelius.':'MAIN metodai skiriasi: '+(all-sameMain)+' iš '+all+' tiražų portfeliai nebuvo identiški.')+(examples.length?' Pavyzdžiai (pirmojo bilieto skaičiai): '+examples.join(' | '):'')+' Vienodi bendri prizų rodikliai savaime nereiškia vienodų prognozių.';
+st.textContent='Baigta: '+all+' tiražai nuo '+ds[start].date+' iki '+ds.at(-1).date+'. Tik skaitymas; LIVE registras nekeistas.';
+}catch(e){st.textContent='KLAIDA: '+e.message}}
+})();
+</script>
+
 </body></html>
