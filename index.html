@@ -1775,7 +1775,7 @@ show();auditRegistry();
 
 
 <section class="card" id="omega106"><h2>OMEGA V10.6 — vieninga LIVE duomenų diagnostika</h2>
-<p class="muted">Šis duomenų šaltinis naudojamas „Dažnis 26 / Dažnis 104“ LIVE ir istoriniams testams. Ankstesni tyrimų moduliai palikti nepakeisti. Įrašai iš naršyklės LIVE registro įtraukiami tik po struktūrinės patikros.</p>
+<p class="muted">Analizės pradžia: <b>2022-03-25</b> (5 iš 50 + 2 EURO iš 12; antradienio ir penktadienio tiražai). Šis duomenų šaltinis naudojamas „Dažnis 26 / Dažnis 104“ LIVE ir istoriniams testams. Ankstesni tyrimų moduliai palikti nepakeisti. Įrašai iš naršyklės LIVE registro įtraukiami tik po struktūrinės patikros.</p>
 <button type="button" onclick="omega106Check()">Patikrinti bendrą istoriją</button>
 <div id="omega106status" class="notice">Dar nepatikrinta.</div>
 <div class="scroll"><table><thead><tr><th>Data</th><th>Būsena</th><th>Naudota istorija iki</th><th>Faktas</th></tr></thead><tbody id="omega106rows"></tbody></table></div>
@@ -1792,7 +1792,7 @@ window.omega106Check=function(){
   const valid=(a,n,max)=>Array.isArray(a)&&a.length===n&&new Set(a).size===n&&a.every(v=>Number.isInteger(v)&&v>=1&&v<=max);
   const map=new Map();let baseCount=0,actualCount=0;
   for(const d of (typeof BASE!=='undefined'&&Array.isArray(BASE)?BASE:[])){
-   if(!d||d.date<'2022-04-01'||d.date>'2026-10-09')continue;
+   if(!d||d.date<'2022-03-25'||d.date>'2026-10-09')continue;
    if(!valid(d.numbers,5,50)||!valid(d.euro,2,12))throw Error('BASE įrašas netinkamas '+d.date);
    if(!map.has(d.date)){map.set(d.date,d);baseCount++}
   }
@@ -1807,8 +1807,20 @@ window.omega106Check=function(){
     const d=map.get(r.date);if(JSON.stringify([...d.numbers].sort((a,b)=>a-b))!==JSON.stringify([...a.numbers].sort((a,b)=>a-b))||JSON.stringify([...d.euro].sort((a,b)=>a-b))!==JSON.stringify([...a.euro].sort((a,b)=>a-b)))throw Error('Duomenų konfliktas '+r.date);
    }else{map.set(r.date,a);actualCount++}
   }
-  const latest=[...map.keys()].sort().at(-1)||'—';
-  el.textContent='Patikra sėkminga. Unikalių istorinių tiražų: '+map.size+'. LIVE faktų papildomai: '+actualCount+'. Naujausias duomenų taškas: '+latest+'. Prognozės generuojamos tik iš datų prieš pasirinktą tiražą.';
+  const sortedDates=[...map.keys()].sort();
+  const earliest=sortedDates[0]||'—',latest=sortedDates[sortedDates.length-1]||'—';
+  const baseDates=[...map.keys()].filter(d=>d<='2026-10-09').sort();
+  const missing=[];
+  if(baseDates.length){
+   let cursor=new Date('2022-03-25T12:00:00Z');
+   const end=new Date(baseDates[baseDates.length-1]+'T12:00:00Z');
+   while(cursor<=end){
+    const dow=cursor.getUTCDay();
+    if(dow===2||dow===5){const day=cursor.toISOString().slice(0,10);if(!map.has(day))missing.push(day)}
+    cursor.setUTCDate(cursor.getUTCDate()+1);
+   }
+  }
+  el.textContent='Patikra baigta. Analizės pradžios taisyklė: 2022-03-25 (EURO 1–12, antradieniai ir penktadieniai). Pirmas turimas tiražas: '+earliest+'. Paskutinis turimas tiražas: '+latest+'. Iš viso unikalių tiražų: '+map.size+' (papildomai iš LIVE registro: '+actualCount+'). Trūkstamų antradienio / penktadienio datų iki 2026-10-09: '+missing.length+(missing.length?' ('+missing.slice(0,12).join(', ')+(missing.length>12?', …':'')+')':'')+'. '+(missing.length?'DĖMESIO: istorijoje yra spragų; patikrinkite duomenų šaltinį. ':'')+'Tai tik vietinės bazės struktūros patikra, o ne rezultatų sutikrinimas su oficialiu archyvu. Prognozės generuojamos tik iš datų prieš pasirinktą tiražą.';
   body.innerHTML=reg.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(r=>'<tr><td>'+r.date+'</td><td>Užrakinta</td><td>'+r.dataThrough+'</td><td>'+(r.actual?'Įrašytas':'Laukiama')+'</td></tr>').join('')||'<tr><td colspan="4">LIVE registras tuščias</td></tr>';
  }catch(e){el.textContent='KLAIDA: '+e.message;body.textContent='';}
 };
