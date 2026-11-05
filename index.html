@@ -1,4 +1,4 @@
-<!doctype html><html lang="lt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMEGA V9.4.4 — LIVE #4 ir LIVE #5</title><style>
+<!doctype html><html lang="lt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMEGA V10.6 — LIVE duomenų diagnostika</title><style>
 :root{--bg:#06111f;--card:#10233d;--card2:#091827;--line:#294766;--text:#eef5ff;--muted:#9fb2cf;--green:#68e2b6;--yellow:#ffd45d;--red:#ff5b61;--blue:#79b8ff}
 *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#071524,#030b14);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .wrap{max-width:1180px;margin:auto;padding:18px}.hero,.card{background:linear-gradient(180deg,#122642,#0d2037);border:1px solid var(--line);border-radius:22px;padding:22px;margin:14px 0;box-shadow:0 12px 35px #0004}
@@ -1698,7 +1698,33 @@ function drawResultAllowed(date){const today=dkToday();return date<today||(date=
 function validDate(s){if(!/^\d{4}-\d\d-\d\d$/.test(s))return false;let d=new Date(s+'T12:00:00Z');return !isNaN(d)&&d.toISOString().slice(0,10)===s}
 function isDraw(s){return [2,5].includes(new Date(s+'T12:00:00Z').getUTCDay())}
 function parse(s,n,max){let a=(s||'').trim().split(/[\s,;·]+/).map(Number);if(a.length!==n||new Set(a).size!==n||a.some(x=>!Number.isInteger(x)||x<1||x>max))throw Error('Reikia '+n+' skirtingų skaičių nuo 1 iki '+max);return a.sort((x,y)=>x-y)}
-function ds(){let seen=new Set();let all=(typeof BASE!=='undefined'&&Array.isArray(BASE)?BASE:[]).filter(d=>d&&validDate(d.date)&&d.date>='2022-04-01'&&d.date<='2026-10-09'&&Array.isArray(d.numbers)&&d.numbers.length===5&&Array.isArray(d.euro)&&d.euro.length===2).concat([{date:'2026-10-06',numbers:[7,12,19,28,50],euro:[1,6]},{date:'2026-10-09',numbers:[18,38,41,43,46],euro:[7,10]}]).sort((a,b)=>b.date.localeCompare(a.date));return all.filter(d=>{if(seen.has(d.date))return false;seen.add(d.date);return true}).reverse()}
+function ds(){
+ // V10.6: one validated source for the V10.5 LIVE frequency experiment.
+ // Legacy research modules intentionally remain unchanged.
+ let records=new Map(), errors=[];
+ const validNums=(a,n,max)=>Array.isArray(a)&&a.length===n&&new Set(a).size===n&&a.every(x=>Number.isInteger(x)&&x>=1&&x<=max);
+ function put(d,source){
+  if(!d||!validDate(d.date)||!isDraw(d.date)||!validNums(d.numbers,5,50)||!validNums(d.euro,2,12)) {errors.push('Netinkamas '+source+' tiražo įrašas');return}
+  let x={date:d.date,numbers:d.numbers.slice().sort((a,b)=>a-b),euro:d.euro.slice().sort((a,b)=>a-b)};
+  if(records.has(x.date)){
+   let prev=records.get(x.date);
+   if(JSON.stringify(prev.numbers)!==JSON.stringify(x.numbers)||JSON.stringify(prev.euro)!==JSON.stringify(x.euro))errors.push('Duomenų konfliktas '+x.date+' ('+source+')');
+   return;
+  }
+  records.set(x.date,x);
+ }
+ for(let d of (typeof BASE!=='undefined'&&Array.isArray(BASE)?BASE:[]))if(d&&d.date>='2022-04-01'&&d.date<='2026-10-09')put(d,'BASE');
+ put({date:'2026-10-06',numbers:[7,12,19,28,50],euro:[1,6]},'2026-10-06');
+ put({date:'2026-10-09',numbers:[18,38,41,43,46],euro:[7,10]},'2026-10-09');
+ let registry=read();
+ for(let r of registry){
+  if(!r||!r.actual)continue;
+  try{validateEntry(r);put({date:r.date,numbers:r.actual.numbers,euro:r.actual.euro},'LIVE '+r.date)}
+  catch(e){errors.push('LIVE '+(r&&r.date||'?')+': '+e.message)}
+ }
+ if(errors.length)throw Error('Istorijos patikra sustabdyta: '+errors.join('; '));
+ return [...records.values()].sort((a,b)=>a.date.localeCompare(b.date));
+}
 function ticket(hist,w){let ranked=(field,max,win)=>{let c=Array(max+1).fill(0);for(let d of hist.slice(-win))for(let n of d[field])c[n]++;return Array.from({length:max},(_,i)=>i+1).sort((a,b)=>c[b]-c[a]||a-b)};let m=ranked('numbers',50,w),e=ranked('euro',12,52);return [0,1,2].map(k=>({m:m.slice(k*5,k*5+5).sort((a,b)=>a-b),e:e.slice(k*2,k*2+2).sort((a,b)=>a-b)}))}
 function hits(t,d){let m=t.m.filter(x=>d.numbers.includes(x)).length,e=t.e.filter(x=>d.euro.includes(x)).length;return {m,e,prize:(m>=3||(m===2&&e>=1)||(m===1&&e===2))?1:0}}
 function show(){
@@ -1715,7 +1741,7 @@ function selection(){let date=$('v105resultdate').value,r=read().find(x=>x.date=
 $('v105resultdate').addEventListener('change',selection);
 
 window.omegaV105History=function(){try{let a=ds(),first=a.findIndex(x=>x.date>='2024-07-05');if(first<104)throw Error('Trūksta duomenų');let years={};for(let i=first;i<a.length;i++){let d=a[i],y=d.date.slice(0,4);if(!years[y])years[y]={n:0,p26:0,p104:0,m26:0,m104:0};years[y].n++;for(let w of [26,104])for(let t of ticket(a.slice(0,i),w)){let h=hits(t,d);years[y]['p'+w]+=h.prize;years[y]['m'+w]+=(h.m>=3?1:0)}}$('v105years').innerHTML=Object.keys(years).sort().map(y=>{let o=years[y];return '<tr><td>'+y+'</td><td>'+o.n+'</td><td>'+o.p26+'</td><td>'+o.p104+'</td><td>'+o.m26+'</td><td>'+o.m104+'</td><td>'+(o.p26-o.p104)+'</td></tr>'}).join('');let vals=Object.values(years),wins=vals.filter(o=>o.p26>o.p104).length;let total26=vals.reduce((a,o)=>a+o.p26,0),total104=vals.reduce((a,o)=>a+o.p104,0);$('v105status').textContent='Istoriniai segmentai: '+Object.keys(years).join(', ')+'. Iš viso '+vals.reduce((a,o)=>a+o.n,0)+' tiražų. Kiekvienam tiražui naudoti tik ankstesni duomenys.';$('v105verdict').textContent='Dažnis 26: '+total26+' priziniai bilietai; Dažnis 104: '+total104+'. 26 laimėjo '+wins+' iš '+vals.length+' metinių segmentų. Tai nėra nepriklausomas metodų patvirtinimas: abu metodai jau nagrinėti pagal šią istoriją. Sprendimui dėl pranašumo būtini būsimi užrakinti tiražai.'}catch(e){$('v105status').textContent='KLAIDA: '+e.message}};
-window.omegaV105Lock=function(){try{let date=$('v105date').value;if(!validDate(date)||!isDraw(date))throw Error('Pasirink antradienio arba penktadienio tiražo datą');if(date<=dkToday())throw Error('Užrakinti leidžiama tik būsimą tiražą, ne šiandien ar praeityje');let a=read();if(a.some(x=>x.date===date))throw Error('Ši data jau užrakinta; pakartotinai keisti negalima');if(a.some(x=>x.date<date&&!x.actual&&drawResultAllowed(x.date)))throw Error('Pirmiausia įrašyk ankstesnio užrakinto tiražo faktą. Taip išvengsi pasenusių duomenų.');let hist=ds().filter(x=>x.date<date);for(let r of a.filter(x=>x.actual&&x.date<date))if(!hist.some(x=>x.date===r.date))hist.push({date:r.date,numbers:r.actual.numbers,euro:r.actual.euro});hist.sort((a,b)=>a.date.localeCompare(b.date));if(hist.length<104)throw Error('Per mažai ankstesnių tiražų');let last=hist[hist.length-1].date;let entry={date,lockedAt:new Date().toISOString(),dataThrough:last,t26:ticket(hist,26),t104:ticket(hist,104),actual:null};a.push(entry);save(a);show();$('v105lockstatus').textContent='UŽRAKINTA '+date+'; duomenys iki '+last+'; laikas '+entry.lockedAt+'. Išsaugok JSON arba ekrano kopiją prieš tiražą.'}catch(e){$('v105lockstatus').textContent='KLAIDA: '+e.message}};
+window.omegaV105Lock=function(){try{let date=$('v105date').value;if(!validDate(date)||!isDraw(date))throw Error('Pasirink antradienio arba penktadienio tiražo datą');if(date<=dkToday())throw Error('Užrakinti leidžiama tik būsimą tiražą, ne šiandien ar praeityje');let a=read();if(a.some(x=>x.date===date))throw Error('Ši data jau užrakinta; pakartotinai keisti negalima');if(a.some(x=>x.date<date&&!x.actual&&drawResultAllowed(x.date)))throw Error('Pirmiausia įrašyk ankstesnio užrakinto tiražo faktą. Taip išvengsi pasenusių duomenų.');let hist=ds().filter(x=>x.date<date);if(hist.length<104)throw Error('Per mažai ankstesnių tiražų');let last=hist[hist.length-1].date;let entry={date,lockedAt:new Date().toISOString(),dataThrough:last,t26:ticket(hist,26),t104:ticket(hist,104),actual:null};a.push(entry);save(a);show();$('v105lockstatus').textContent='UŽRAKINTA '+date+'; duomenys iki '+last+'; laikas '+entry.lockedAt+'. Išsaugok JSON arba ekrano kopiją prieš tiražą.'}catch(e){$('v105lockstatus').textContent='KLAIDA: '+e.message}};
 window.omegaV105Settle=function(){try{let date=$('v105resultdate').value,a=read(),r=a.find(x=>x.date===date);if(!r)throw Error('Pasirink užrakintą tiražą iš sąrašo');if(r.actual)throw Error('Faktinis rezultatas jau užfiksuotas. Perrašyti draudžiama');if(!drawResultAllowed(date))throw Error('Faktą leidžiama įrašyti tiražo dieną nuo 22:00 Danijos laiku arba vėliau. Patikrink oficialų rezultatą prieš patvirtindamas.');let numbers=parse($('v105main').value,5,50),euro=parse($('v105euro').value,2,12);if(!confirm('Patvirtinti '+date+' rezultatą: '+numbers.join('·')+' + '+euro.join('·')+'? Po patvirtinimo šio įrašo pakeisti negalėsi.'))return;r.actual={numbers,euro,recordedAt:new Date().toISOString(),source:'naudotojo įvesta, nepatikrinta nepriklausomai'};save(a);show();let p=w=>r['t'+w].reduce((z,t)=>z+hits(t,r.actual).prize,0);$('v105resultstatus').textContent=date+': '+numbers.join('·')+' + '+euro.join('·')+'. Priziniai: 26 = '+p(26)+'/3; 104 = '+p(104)+'/3. Rezultatas užfiksuotas, perrašymas išjungtas.'}catch(e){$('v105resultstatus').textContent='KLAIDA: '+e.message}};
 function validateEntry(r){
  if(!r||typeof r!=='object'||!validDate(r.date)||!isDraw(r.date))throw Error('Netinkama tiražo data');
@@ -1747,4 +1773,45 @@ show();auditRegistry();
 })();
 </script>
 
+
+<section class="card" id="omega106"><h2>OMEGA V10.6 — vieninga LIVE duomenų diagnostika</h2>
+<p class="muted">Šis duomenų šaltinis naudojamas „Dažnis 26 / Dažnis 104“ LIVE ir istoriniams testams. Ankstesni tyrimų moduliai palikti nepakeisti. Įrašai iš naršyklės LIVE registro įtraukiami tik po struktūrinės patikros.</p>
+<button type="button" onclick="omega106Check()">Patikrinti bendrą istoriją</button>
+<div id="omega106status" class="notice">Dar nepatikrinta.</div>
+<div class="scroll"><table><thead><tr><th>Data</th><th>Būsena</th><th>Naudota istorija iki</th><th>Faktas</th></tr></thead><tbody id="omega106rows"></tbody></table></div>
+<p class="muted">Svarbu: naudotojo įvestas faktas nėra automatiškai patikrintas pagal oficialų šaltinį. Vietinė naršyklės saugykla nėra neklastojamas įrodymas.</p></section>
+<script>(function(){'use strict';
+window.omega106Check=function(){
+ const el=document.getElementById('omega106status'),body=document.getElementById('omega106rows');
+ try{
+  const k='OMEGA_V105_FORWARD_REGISTRY_V1',reg=JSON.parse(localStorage.getItem(k)||'[]');
+  if(!Array.isArray(reg))throw Error('Registro formatas netinkamas');
+  const dates=new Set(),problems=[];
+  for(const r of reg){if(!r||!/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')){problems.push('Netinkama data');continue}if(dates.has(r.date))problems.push('Pasikartojanti data '+r.date);dates.add(r.date)}
+  if(problems.length)throw Error(problems.join('; '));
+  const valid=(a,n,max)=>Array.isArray(a)&&a.length===n&&new Set(a).size===n&&a.every(v=>Number.isInteger(v)&&v>=1&&v<=max);
+  const map=new Map();let baseCount=0,actualCount=0;
+  for(const d of (typeof BASE!=='undefined'&&Array.isArray(BASE)?BASE:[])){
+   if(!d||d.date<'2022-04-01'||d.date>'2026-10-09')continue;
+   if(!valid(d.numbers,5,50)||!valid(d.euro,2,12))throw Error('BASE įrašas netinkamas '+d.date);
+   if(!map.has(d.date)){map.set(d.date,d);baseCount++}
+  }
+  for(const d of [{date:'2026-10-06',numbers:[7,12,19,28,50],euro:[1,6]},{date:'2026-10-09',numbers:[18,38,41,43,46],euro:[7,10]}]){
+   if(map.has(d.date)){
+    let old=map.get(d.date);if(JSON.stringify([...old.numbers].sort((a,b)=>a-b))!==JSON.stringify(d.numbers)||JSON.stringify([...old.euro].sort((a,b)=>a-b))!==JSON.stringify(d.euro))throw Error('Konfliktas '+d.date);
+   }else map.set(d.date,d);
+  }
+  for(const r of reg){if(!r.actual)continue;const a=r.actual;
+   if(!valid(a.numbers,5,50)||!valid(a.euro,2,12))throw Error('Neteisingas faktas '+r.date);
+   if(map.has(r.date)){
+    const d=map.get(r.date);if(JSON.stringify([...d.numbers].sort((a,b)=>a-b))!==JSON.stringify([...a.numbers].sort((a,b)=>a-b))||JSON.stringify([...d.euro].sort((a,b)=>a-b))!==JSON.stringify([...a.euro].sort((a,b)=>a-b)))throw Error('Duomenų konfliktas '+r.date);
+   }else{map.set(r.date,a);actualCount++}
+  }
+  const latest=[...map.keys()].sort().at(-1)||'—';
+  el.textContent='Patikra sėkminga. Unikalių istorinių tiražų: '+map.size+'. LIVE faktų papildomai: '+actualCount+'. Naujausias duomenų taškas: '+latest+'. Prognozės generuojamos tik iš datų prieš pasirinktą tiražą.';
+  body.innerHTML=reg.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(r=>'<tr><td>'+r.date+'</td><td>Užrakinta</td><td>'+r.dataThrough+'</td><td>'+(r.actual?'Įrašytas':'Laukiama')+'</td></tr>').join('')||'<tr><td colspan="4">LIVE registras tuščias</td></tr>';
+ }catch(e){el.textContent='KLAIDA: '+e.message;body.textContent='';}
+};
+window.omega106Check();
+})();</script>
 </body></html>
